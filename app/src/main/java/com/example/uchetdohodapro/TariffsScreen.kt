@@ -95,6 +95,18 @@ fun TariffsScreen(
             .verticalScroll(rememberScrollState())
             .padding(20.dp)
     ) {
+        Button(
+    onClick = onBack,
+    colors = ButtonDefaults.buttonColors(
+        containerColor = Color(0xFF272C30),
+        contentColor = Color(0xFFF4F5F6)
+    ),
+    shape = RoundedCornerShape(12.dp)
+) {
+    Text("← Назад", fontWeight = FontWeight.SemiBold)
+}
+
+Spacer(Modifier.height(18.dp))
         Text(
             text = "НАСТРОЙКИ",
             color = TariffOrange,
