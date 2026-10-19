@@ -79,12 +79,20 @@ private fun IncomeApp() {
     var selectedTab by remember { mutableIntStateOf(0) }
     var showAddDialog by remember { mutableStateOf(false) }
     var showTariffs by remember { mutableStateOf(false) }
+    var showWorkDay by remember { mutableStateOf(false) }
 
     if (showTariffs) {
         TariffsScreen(
             onBack = { showTariffs = false }
         )
         return
+    }
+    
+    if (showWorkDay) {
+    WorkDayScreen(
+        onBack = { showWorkDay = false }
+    )
+    return
     }
 
     Scaffold(
@@ -153,31 +161,41 @@ private fun IncomeApp() {
     }
 
     if (showAddDialog) {
-        AlertDialog(
-            onDismissRequest = { showAddDialog = false },
-            containerColor = Panel,
-            title = {
-                Text("Новый рабочий день", color = MainText)
-            },
-            text = {
-                Text(
-                    "Форму рабочего дня подключим следующим этапом.",
-                    color = SecondaryText
+    AlertDialog(
+        onDismissRequest = { showAddDialog = false },
+        containerColor = Panel,
+        title = {
+            Text("Новый рабочий день", color = MainText)
+        },
+        text = {
+            Text(
+                "Открыть форму для ввода показателей рабочего дня?",
+                color = SecondaryText
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    showAddDialog = false
+                    showWorkDay = true
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Orange,
+                    contentColor = Color.Black
                 )
-            },
-            confirmButton = {
-                Button(
-                    onClick = { showAddDialog = false },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Orange,
-                        contentColor = Color.Black
-                    )
-                ) {
-                    Text("Понятно")
-                }
+            ) {
+                Text("Открыть форму")
             }
-        )
-    }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = { showAddDialog = false }
+            ) {
+                Text("Отмена", color = MainText)
+            }
+        }
+    )
+}
 }
 
 @Composable
