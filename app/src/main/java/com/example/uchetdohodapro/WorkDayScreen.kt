@@ -43,12 +43,10 @@ fun WorkDayScreen(onBack: () -> Unit = {}) {
     var saved by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        tariffs = dao.observeTariffs().let { flow ->
-            var result: TariffEntity? = null
-            kotlinx.coroutines.flow.first(flow).also { result = it }
-            result
-        }
+    dao.observeTariffs().collect { value ->
+        tariffs = value
     }
+}
 
     val income =
         (picks.toDoubleOrNull() ?: 0.0) * (tariffs?.picksRate ?: 0.0) +
