@@ -90,7 +90,7 @@ fun WorkDayScreen(onBack: () -> Unit = {}) {
         WorkDayNumberField("Пики", picks, { picks = it; saved = false })
         WorkDayNumberField("Вес", weight, { weight = it; saved = false })
         WorkDayNumberField("Объём", volume, { volume = it; saved = false })
-        WorkDayNumberField("Коробки", boxes, { boxes = it; saved = false })
+        WorkDayNumberField("Боксы", boxes, { boxes = it; saved = false })
         WorkDayNumberField("Часы", hours, { hours = it; saved = false })
 
         Card(
