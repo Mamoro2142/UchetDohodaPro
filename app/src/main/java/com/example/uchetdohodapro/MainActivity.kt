@@ -4,18 +4,16 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -80,6 +78,14 @@ class MainActivity : ComponentActivity() {
 private fun IncomeApp() {
     var selectedTab by remember { mutableIntStateOf(0) }
     var showAddDialog by remember { mutableStateOf(false) }
+    var showTariffs by remember { mutableStateOf(false) }
+
+    if (showTariffs) {
+        TariffsScreen(
+            onBack = { showTariffs = false }
+        )
+        return
+    }
 
     Scaffold(
         containerColor = Background,
@@ -109,10 +115,7 @@ private fun IncomeApp() {
                             )
                         },
                         label = {
-                            Text(
-                                text = title,
-                                fontSize = 10.sp
-                            )
+                            Text(text = title, fontSize = 10.sp)
                         }
                     )
                 }
@@ -126,16 +129,31 @@ private fun IncomeApp() {
                 .background(Background)
         ) {
             when (selectedTab) {
-                0 -> HomeScreen(onAddClick = { showAddDialog = true })
-                1 -> ShiftScreen()
-                2 -> StatisticsScreen()
-                else -> ProfileScreen()
+                0 -> HomeScreen(
+                    onAddClick = { showAddDialog = true }
+                )
+
+                1 -> SimpleScreen(
+                    title = "Вахта",
+                    subtitle = "Управление вахтами",
+                    symbol = "▣"
+                )
+
+                2 -> SimpleScreen(
+                    title = "Статистика",
+                    subtitle = "Доходы и показатели",
+                    symbol = "▥"
+                )
+
+                else -> ProfileScreen(
+                    onTariffsClick = { showTariffs = true }
+                )
             }
         }
     }
 
     if (showAddDialog) {
-        androidx.compose.material3.AlertDialog(
+        AlertDialog(
             onDismissRequest = { showAddDialog = false },
             containerColor = Panel,
             title = {
@@ -143,7 +161,7 @@ private fun IncomeApp() {
             },
             text = {
                 Text(
-                    "Следующим этапом добавим ввод показателей, тарифы и автоматический расчёт заработка.",
+                    "Форму рабочего дня подключим следующим этапом.",
                     color = SecondaryText
                 )
             },
@@ -171,7 +189,7 @@ private fun HomeScreen(onAddClick: () -> Unit) {
             .padding(horizontal = 20.dp, vertical = 18.dp)
     ) {
         Text(
-            text = "УЧЁТ ДОХОДА",
+            "УЧЁТ ДОХОДА",
             color = Orange,
             fontSize = 13.sp,
             fontWeight = FontWeight.Bold,
@@ -181,14 +199,14 @@ private fun HomeScreen(onAddClick: () -> Unit) {
         Spacer(Modifier.height(6.dp))
 
         Text(
-            text = "Главная",
+            "Главная",
             color = MainText,
             fontSize = 29.sp,
             fontWeight = FontWeight.Bold
         )
 
         Text(
-            text = "Твой заработок под контролем",
+            "Твой заработок под контролем",
             color = SecondaryText,
             fontSize = 14.sp
         )
@@ -219,7 +237,7 @@ private fun HomeScreen(onAddClick: () -> Unit) {
 
                 Spacer(Modifier.height(16.dp))
 
-                Row(
+                androidx.compose.foundation.layout.Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
@@ -232,7 +250,7 @@ private fun HomeScreen(onAddClick: () -> Unit) {
 
         Spacer(Modifier.height(14.dp))
 
-        Row(
+        androidx.compose.foundation.layout.Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -242,6 +260,7 @@ private fun HomeScreen(onAddClick: () -> Unit) {
                 value = "0",
                 subtitle = "за вахту"
             )
+
             SmallCard(
                 modifier = Modifier.weight(1f),
                 title = "Отработано",
@@ -293,8 +312,14 @@ private fun HomeScreen(onAddClick: () -> Unit) {
                     .padding(18.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text("Пока нет записей", color = MainText, fontSize = 16.sp)
+                Text(
+                    "Пока нет записей",
+                    color = MainText,
+                    fontSize = 16.sp
+                )
+
                 Spacer(Modifier.height(5.dp))
+
                 Text(
                     "Добавленные рабочие дни появятся здесь",
                     color = SecondaryText,
@@ -306,7 +331,11 @@ private fun HomeScreen(onAddClick: () -> Unit) {
 }
 
 @Composable
-private fun MiniValue(title: String, value: String, color: Color) {
+private fun MiniValue(
+    title: String,
+    value: String,
+    color: Color
+) {
     Column {
         Text(title, color = SecondaryText, fontSize = 11.sp)
         Spacer(Modifier.height(4.dp))
@@ -408,28 +437,94 @@ private fun SimpleScreen(
 }
 
 @Composable
-private fun ShiftScreen() {
-    SimpleScreen(
-        title = "Вахта",
-        subtitle = "Управление вахтами",
-        symbol = "▣"
-    )
-}
+private fun ProfileScreen(onTariffsClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(22.dp)
+    ) {
+        Text(
+            "УЧЁТ ДОХОДА",
+            color = Orange,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 2.sp
+        )
 
-@Composable
-private fun StatisticsScreen() {
-    SimpleScreen(
-        title = "Статистика",
-        subtitle = "Доходы и показатели",
-        symbol = "▥"
-    )
-}
+        Spacer(Modifier.height(8.dp))
 
-@Composable
-private fun ProfileScreen() {
-    SimpleScreen(
-        title = "Профиль",
-        subtitle = "Настройки и резервная копия",
-        symbol = "⚙"
-    )
+        Text(
+            "Профиль",
+            color = MainText,
+            fontSize = 29.sp,
+            fontWeight = FontWeight.Bold
+        )
+
+        Spacer(Modifier.height(22.dp))
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = Panel)
+        ) {
+            Column(Modifier.padding(18.dp)) {
+                Text(
+                    "Расчёт заработка",
+                    color = MainText,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                Spacer(Modifier.height(6.dp))
+
+                Text(
+                    "Настрой стоимость пиков, веса, объёма, боксов и часов.",
+                    color = SecondaryText,
+                    fontSize = 13.sp
+                )
+
+                Spacer(Modifier.height(16.dp))
+
+                Button(
+                    onClick = onTariffsClick,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Orange,
+                        contentColor = Color.Black
+                    )
+                ) {
+                    Text(
+                        "Настроить тарифы",
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = Panel)
+        ) {
+            Column(Modifier.padding(18.dp)) {
+                Text(
+                    "Резервная копия",
+                    color = MainText,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                Spacer(Modifier.height(5.dp))
+
+                Text(
+                    "Добавим сохранение и восстановление данных позднее.",
+                    color = SecondaryText,
+                    fontSize = 13.sp
+                )
+            }
+        }
+    }
 }
