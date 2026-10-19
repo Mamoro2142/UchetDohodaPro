@@ -87,7 +87,7 @@ fun WorkDayScreen(onBack: () -> Unit = {}) {
             modifier = Modifier.fillMaxWidth()
         )
 
-        WorkDayNumberField("Подборы", picks, { picks = it; saved = false })
+        WorkDayNumberField("Пики", picks, { picks = it; saved = false })
         WorkDayNumberField("Вес", weight, { weight = it; saved = false })
         WorkDayNumberField("Объём", volume, { volume = it; saved = false })
         WorkDayNumberField("Коробки", boxes, { boxes = it; saved = false })
