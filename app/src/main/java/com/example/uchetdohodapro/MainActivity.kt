@@ -142,11 +142,7 @@ private fun IncomeApp() {
                     onAddClick = { showAddDialog = true }
                 )
 
-                1 -> SimpleScreen(
-                    title = "Вахта",
-                    subtitle = "Управление вахтами",
-                    symbol = "▣"
-                )
+                1 -> WorkHistoryScreen()
 
                 2 -> SimpleScreen(
                     title = "Статистика",
