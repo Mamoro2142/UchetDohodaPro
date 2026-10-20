@@ -30,17 +30,19 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Restore permanent signing key
+      - name: Restore signing key
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
           if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "Missing ANDROID_KEYSTORE_BASE64 secret"
+            echo "ERROR: ANDROID_KEYSTORE_BASE64 is missing"
             exit 1
           fi
 
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/uchet-pro.jks"
           chmod 600 "$RUNNER_TEMP/uchet-pro.jks"
+
+          test -s "$RUNNER_TEMP/uchet-pro.jks"
 
       - name: Build signed APK
         env:
@@ -48,7 +50,18 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: gradle assembleDebug
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_PATH" ] || [ ! -f "$ANDROID_KEYSTORE_PATH" ]; then
+            echo "ERROR: Keystore file not found"
+            exit 1
+          fi
+
+          if [ -z "$ANDROID_KEYSTORE_PASSWORD" ] || [ -z "$ANDROID_KEY_ALIAS" ] || [ -z "$ANDROID_KEY_PASSWORD" ]; then
+            echo "ERROR: Signing secrets are missing"
+            exit 1
+          fi
+
+          gradle assembleDebug
 
       - name: Verify APK signature
         run: |
@@ -62,3 +75,4 @@ jobs:
           name: UchetDohodaPro-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+          
