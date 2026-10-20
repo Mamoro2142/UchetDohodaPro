@@ -38,6 +38,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.platform.LocalContext
+import com.example.uchetdohodapro.data.WorkDatabase
+import java.util.Locale
+import androidx.compose.foundation.verticalScroll
 
 private val Background = Color(0xFF111315)
 private val Panel = Color(0xFF1C2023)
@@ -302,6 +307,158 @@ private fun HomeScreen(onAddClick: () -> Unit) {
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold
             )
+
+@Composable
+private fun HomeScreen(onAddClick: () -> Unit) {
+    val context = LocalContext.current
+    val dao = remember(context) {
+        WorkDatabase.getInstance(context).workDao()
+    }
+
+    val days by remember(dao) {
+        dao.observeWorkDays()
+    }.collectAsState(initial = emptyList())
+
+    val totalIncome = days.sumOf { it.calculateIncome() }
+    val totalHours = days.sumOf { it.hours ?: 0.0 }
+    val recentDays = days.take(3)
+
+    fun money(value: Double): String {
+        return String.format(Locale.getDefault(), "%.2f ₽", value)
+    }
+
+    fun number(value: Double): String {
+        return if (value % 1.0 == 0.0) {
+            value.toLong().toString()
+        } else {
+            String.format(Locale.getDefault(), "%.2f", value)
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Background)
+            .verticalScroll(
+                androidx.compose.foundation.rememberScrollState()
+            )
+            .padding(horizontal = 20.dp, vertical = 18.dp)
+    ) {
+        Text(
+            "УЧЁТ ДОХОДА",
+            color = Orange,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 2.sp
+        )
+
+        Spacer(Modifier.height(6.dp))
+
+        Text(
+            "Главная",
+            color = MainText,
+            fontSize = 29.sp,
+            fontWeight = FontWeight.Bold
+        )
+
+        Text(
+            "Твой заработок под контролем",
+            color = SecondaryText,
+            fontSize = 14.sp
+        )
+
+        Spacer(Modifier.height(22.dp))
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(22.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = Panel
+            )
+        ) {
+            Column(Modifier.padding(20.dp)) {
+                Text(
+                    "ЗАРАБОТАНО ВСЕГО",
+                    color = SecondaryText,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                Text(
+                    money(totalIncome),
+                    color = Green,
+                    fontSize = 34.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(Modifier.height(16.dp))
+
+                androidx.compose.foundation.layout.Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    MiniValue(
+                        "Начислено",
+                        money(totalIncome),
+                        Green
+                    )
+
+                    MiniValue(
+                        "Авансы",
+                        "0 ₽",
+                        Orange
+                    )
+
+                    MiniValue(
+                        "Штрафы",
+                        "0 ₽",
+                        Red
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        androidx.compose.foundation.layout.Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            SmallCard(
+                modifier = Modifier.weight(1f),
+                title = "Рабочие дни",
+                value = days.size.toString(),
+                subtitle = "всего"
+            )
+
+            SmallCard(
+                modifier = Modifier.weight(1f),
+                title = "Отработано",
+                value = "${number(totalHours)} ч",
+                subtitle = "всего часов"
+            )
+        }
+
+        Spacer(Modifier.height(22.dp))
+
+        Button(
+            onClick = onAddClick,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Orange,
+                contentColor = Color.Black
+            )
+        ) {
+            Text(
+                "+  Добавить рабочий день",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            )
         }
 
         Spacer(Modifier.height(20.dp))
@@ -316,34 +473,73 @@ private fun HomeScreen(onAddClick: () -> Unit) {
 
         Spacer(Modifier.height(10.dp))
 
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Panel)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(18.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+        if (recentDays.isEmpty()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Panel
+                )
             ) {
-                Text(
-                    "Пока нет записей",
-                    color = MainText,
-                    fontSize = 16.sp
-                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(18.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        "Пока нет записей",
+                        color = MainText,
+                        fontSize = 16.sp
+                    )
 
-                Spacer(Modifier.height(5.dp))
+                    Spacer(Modifier.height(5.dp))
 
-                Text(
-                    "Добавленные рабочие дни появятся здесь",
-                    color = SecondaryText,
-                    fontSize = 12.sp
-                )
+                    Text(
+                        "Добавленные рабочие дни появятся здесь",
+                        color = SecondaryText,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+        } else {
+            recentDays.forEach { day ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Panel
+                    )
+                ) {
+                    androidx.compose.foundation.layout.Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(18.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            day.date,
+                            color = MainText,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+
+                        Text(
+                            money(day.calculateIncome()),
+                            color = Green,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(10.dp))
             }
         }
     }
 }
+
 
 @Composable
 private fun MiniValue(
