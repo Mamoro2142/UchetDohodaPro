@@ -149,11 +149,7 @@ private fun IncomeApp() {
 
                 1 -> WorkHistoryScreen()
 
-                2 -> SimpleScreen(
-                    title = "Статистика",
-                    subtitle = "Доходы и показатели",
-                    symbol = "▥"
-                )
+                2 -> StatisticsScreen()
 
                 else -> ProfileScreen(
                     onTariffsClick = { showTariffs = true }
