@@ -1,21 +1,37 @@
 
 package com.example.uchetdohodapro
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.platform.LocalContext
 import com.example.uchetdohodapro.data.WorkDatabase
 import com.example.uchetdohodapro.data.WorkDayEntity
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
 import java.util.Locale
+
+private val HistoryBackground = Color(0xFF111315)
+private val HistoryPanel = Color(0xFF1C2023)
+private val HistoryPanelLight = Color(0xFF272C30)
+private val HistoryOrange = Color(0xFFFF8A24)
+private val HistoryGreen = Color(0xFF43D17D)
+private val HistoryRed = Color(0xFFFF5C5C)
+private val HistoryText = Color(0xFFF4F5F6)
+private val HistoryMuted = Color(0xFF9DA5AB)
 
 @Composable
 fun WorkHistoryScreen() {
@@ -23,87 +39,205 @@ fun WorkHistoryScreen() {
     val dao = remember(context) {
         WorkDatabase.getInstance(context).workDao()
     }
+    val scope = rememberCoroutineScope()
 
-    val days by dao.observeWorkDays()
-        .collectAsState(initial = emptyList())
+    val days by remember(dao) {
+        dao.observeWorkDays()
+    }.collectAsState(initial = emptyList())
 
-    val total = days.sumOf { it.calculateIncome() }
+    var editingDay by remember { mutableStateOf<WorkDayEntity?>(null) }
+    var deletingDay by remember { mutableStateOf<WorkDayEntity?>(null) }
+    var saving by remember { mutableStateOf(false) }
+    var operationError by remember { mutableStateOf("") }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(20.dp)
-    ) {
-        Text(
-            "ИСТОРИЯ РАБОЧИХ ДНЕЙ",
-            color = Color(0xFFFF8A24),
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Bold
+    if (editingDay != null) {
+        val day = editingDay!!
+
+        WorkDayEditScreen(
+            day = day,
+            saving = saving,
+            onBack = {
+                if (!saving) {
+                    editingDay = null
+                    operationError = ""
+                }
+            },
+            onSave = { updated ->
+                if (!saving) {
+                    saving = true
+                    scope.launch {
+                        try {
+                            dao.updateWorkDay(updated)
+                            editingDay = null
+                            operationError = ""
+                        } catch (e: Exception) {
+                            operationError = "Не удалось сохранить изменения."
+                        } finally {
+                            saving = false
+                        }
+                    }
+                }
+            },
+            onDelete = {
+                deletingDay = day
+            },
+            error = operationError
         )
+    } else {
+        val total = days.sumOf { it.calculateIncome() }
 
-        Spacer(Modifier.height(16.dp))
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = Color(0xFF1C2023)
-            ),
-            shape = RoundedCornerShape(18.dp)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(20.dp)
         ) {
-            Column(Modifier.padding(18.dp)) {
-                Text(
-                    "Всего заработано",
-                    color = Color(0xFF9DA5AB)
-                )
-
-                Text(
-                    String.format(Locale.getDefault(), "%.2f ₽", total),
-                    color = Color(0xFF43D17D),
-                    fontSize = 30.sp,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Spacer(Modifier.height(8.dp))
-
-                Text(
-                    "Рабочих дней: ${days.size}",
-                    color = Color(0xFFF4F5F6)
-                )
-            }
-        }
-
-        Spacer(Modifier.height(18.dp))
-
-        if (days.isEmpty()) {
             Text(
-                "Пока нет сохранённых рабочих дней.",
-                color = Color(0xFF9DA5AB)
+                "ИСТОРИЯ РАБОЧИХ ДНЕЙ",
+                color = HistoryOrange,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold
             )
-        } else {
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+
+            Spacer(Modifier.height(16.dp))
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = HistoryPanel
+                ),
+                shape = RoundedCornerShape(18.dp)
             ) {
-                items(days, key = { it.id }) { day ->
-                    WorkHistoryCard(day)
+                Column(Modifier.padding(18.dp)) {
+                    Text(
+                        "Всего заработано",
+                        color = HistoryMuted
+                    )
+
+                    Text(
+                        String.format(Locale.getDefault(), "%.2f ₽", total),
+                        color = HistoryGreen,
+                        fontSize = 30.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Spacer(Modifier.height(8.dp))
+
+                    Text(
+                        "Рабочих дней: ${days.size}",
+                        color = HistoryText
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            Text(
+                "Нажми на рабочий день, чтобы изменить или удалить его.",
+                color = HistoryMuted,
+                fontSize = 12.sp
+            )
+
+            Spacer(Modifier.height(14.dp))
+
+            if (days.isEmpty()) {
+                Text(
+                    "Пока нет сохранённых рабочих дней.",
+                    color = HistoryMuted
+                )
+            } else {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    items(days, key = { it.id }) { day ->
+                        WorkHistoryCard(
+                            day = day,
+                            onClick = {
+                                operationError = ""
+                                editingDay = day
+                            }
+                        )
+                    }
                 }
             }
         }
     }
+
+    if (deletingDay != null) {
+        val dayToDelete = deletingDay!!
+
+        AlertDialog(
+            onDismissRequest = {
+                if (!saving) deletingDay = null
+            },
+            containerColor = HistoryPanel,
+            title = {
+                Text("Удалить рабочий день?", color = HistoryText)
+            },
+            text = {
+                Text(
+                    "Запись за ${dayToDelete.date} будет удалена без возможности восстановления.",
+                    color = HistoryMuted
+                )
+            },
+            confirmButton = {
+                Button(
+                    enabled = !saving,
+                    onClick = {
+                        if (!saving) {
+                            saving = true
+                            scope.launch {
+                                try {
+                                    dao.deleteWorkDay(dayToDelete.id)
+                                    deletingDay = null
+                                    editingDay = null
+                                    operationError = ""
+                                } catch (e: Exception) {
+                                    deletingDay = null
+                                    operationError = "Не удалось удалить запись."
+                                } finally {
+                                    saving = false
+                                }
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = HistoryRed,
+                        contentColor = Color.Black
+                    )
+                ) {
+                    Text("Удалить")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !saving,
+                    onClick = { deletingDay = null }
+                ) {
+                    Text("Отмена", color = HistoryText)
+                }
+            }
+        )
+    }
 }
 
 @Composable
-private fun WorkHistoryCard(day: WorkDayEntity) {
+private fun WorkHistoryCard(
+    day: WorkDayEntity,
+    onClick: () -> Unit
+) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF272C30)
+            containerColor = HistoryPanelLight
         ),
         shape = RoundedCornerShape(16.dp)
     ) {
         Column(Modifier.padding(16.dp)) {
             Text(
                 day.date,
-                color = Color(0xFFF4F5F6),
+                color = HistoryText,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -116,7 +250,7 @@ private fun WorkHistoryCard(day: WorkDayEntity) {
                     "%.2f ₽",
                     day.calculateIncome()
                 ),
-                color = Color(0xFF43D17D),
+                color = HistoryGreen,
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -124,20 +258,235 @@ private fun WorkHistoryCard(day: WorkDayEntity) {
             Spacer(Modifier.height(8.dp))
 
             if (day.picks != null) {
-                Text("Пики: ${day.picks}", color = Color.White)
+                Text("Пики: ${day.picks}", color = HistoryText)
             }
             if (day.weight != null) {
-                Text("Вес: ${day.weight}", color = Color.White)
+                Text("Вес: ${day.weight}", color = HistoryText)
             }
             if (day.volume != null) {
-                Text("Объём: ${day.volume}", color = Color.White)
+                Text("Объём: ${day.volume}", color = HistoryText)
             }
             if (day.boxes != null) {
-                Text("Коробки: ${day.boxes}", color = Color.White)
+                Text("Коробки: ${day.boxes}", color = HistoryText)
             }
             if (day.hours != null) {
-                Text("Часы: ${day.hours}", color = Color.White)
+                Text("Часы: ${day.hours}", color = HistoryText)
             }
         }
     }
+}
+
+@Composable
+private fun WorkDayEditScreen(
+    day: WorkDayEntity,
+    saving: Boolean,
+    onBack: () -> Unit,
+    onSave: (WorkDayEntity) -> Unit,
+    onDelete: () -> Unit,
+    error: String
+) {
+    var date by remember(day.id) { mutableStateOf(day.date) }
+    var picks by remember(day.id) { mutableStateOf(day.picks.toInputText()) }
+    var weight by remember(day.id) { mutableStateOf(day.weight.toInputText()) }
+    var volume by remember(day.id) { mutableStateOf(day.volume.toInputText()) }
+    var boxes by remember(day.id) { mutableStateOf(day.boxes.toInputText()) }
+    var hours by remember(day.id) { mutableStateOf(day.hours.toInputText()) }
+    var validationError by remember(day.id) { mutableStateOf("") }
+
+    val income =
+        (picks.toDoubleOrNull() ?: 0.0) * day.picksRate +
+        (weight.toDoubleOrNull() ?: 0.0) * day.weightRate +
+        (volume.toDoubleOrNull() ?: 0.0) * day.volumeRate +
+        (boxes.toDoubleOrNull() ?: 0.0) * day.boxesRate +
+        (hours.toDoubleOrNull() ?: 0.0) * day.hoursRate
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Button(
+            onClick = onBack,
+            enabled = !saving,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = HistoryPanelLight,
+                contentColor = HistoryText
+            )
+        ) {
+            Text("← Назад")
+        }
+
+        Text(
+            "РЕДАКТИРОВАНИЕ ДНЯ",
+            color = HistoryOrange,
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Bold
+        )
+
+        OutlinedTextField(
+            value = date,
+            onValueChange = { date = it },
+            label = { Text("Дата (ГГГГ-ММ-ДД)") },
+            singleLine = true,
+            enabled = !saving,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        HistoryNumberField("Пики", picks, { picks = it }, !saving)
+        HistoryNumberField("Вес", weight, { weight = it }, !saving)
+        HistoryNumberField("Объём", volume, { volume = it }, !saving)
+        HistoryNumberField("Коробки", boxes, { boxes = it }, !saving)
+        HistoryNumberField("Часы", hours, { hours = it }, !saving)
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = HistoryPanel
+            ),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(Modifier.padding(16.dp)) {
+                Text("Заработок за день", color = HistoryMuted)
+                Text(
+                    String.format(Locale.getDefault(), "%.2f ₽", income),
+                    color = HistoryGreen,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
+        Text(
+            "Расчёт использует тарифы, сохранённые для этого дня.",
+            color = HistoryMuted,
+            fontSize = 12.sp
+        )
+
+        if (validationError.isNotBlank()) {
+            Text(validationError, color = HistoryRed)
+        }
+
+        if (error.isNotBlank()) {
+            Text(error, color = HistoryRed)
+        }
+
+        Button(
+            onClick = {
+                val parser = SimpleDateFormat(
+                    "yyyy-MM-dd",
+                    Locale.getDefault()
+                ).apply {
+                    isLenient = false
+                }
+
+                val parsedDate = runCatching {
+                    parser.parse(date)?.let {
+                        SimpleDateFormat(
+                            "yyyy-MM-dd",
+                            Locale.getDefault()
+                        ).format(it)
+                    }
+                }.getOrNull()
+
+                val inputs = listOf(
+                    picks, weight, volume, boxes, hours
+                )
+
+                val invalid = inputs.any { value ->
+                    value.isNotBlank() &&
+                        (
+                            value.toDoubleOrNull() == null ||
+                            !value.toDoubleOrNull()!!.isFinite() ||
+                            value.toDoubleOrNull()!! < 0.0
+                        )
+                }
+
+                when {
+                    parsedDate == null || parsedDate != date -> {
+                        validationError =
+                            "Укажи правильную дату в формате ГГГГ-ММ-ДД."
+                    }
+
+                    invalid -> {
+                        validationError =
+                            "Показатели должны быть числами не меньше нуля."
+                    }
+
+                    else -> {
+                        validationError = ""
+
+                        onSave(
+                            day.copy(
+                                date = date,
+                                picks = picks.toOptionalNumber(),
+                                weight = weight.toOptionalNumber(),
+                                volume = volume.toOptionalNumber(),
+                                boxes = boxes.toOptionalNumber(),
+                                hours = hours.toOptionalNumber()
+                            )
+                        )
+                    }
+                }
+            },
+            enabled = !saving,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = HistoryOrange,
+                contentColor = Color.Black
+            ),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Text(
+                if (saving) "СОХРАНЯЕМ..." else "СОХРАНИТЬ ИЗМЕНЕНИЯ",
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        OutlinedButton(
+            onClick = onDelete,
+            enabled = !saving,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.outlinedButtonColors(
+                contentColor = HistoryRed
+            )
+        ) {
+            Text("Удалить рабочий день")
+        }
+    }
+}
+
+@Composable
+private fun HistoryNumberField(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    enabled: Boolean
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label) },
+        singleLine = true,
+        enabled = enabled,
+        keyboardOptions = KeyboardOptions(
+            keyboardType = KeyboardType.Decimal
+        ),
+        modifier = Modifier.fillMaxWidth()
+    )
+}
+
+private fun Double?.toInputText(): String {
+    return this?.let {
+        if (it % 1.0 == 0.0) {
+            it.toLong().toString()
+        } else {
+            it.toString()
+        }
+    } ?: ""
+}
+
+private fun String.toOptionalNumber(): Double? {
+    return if (isBlank()) null else toDoubleOrNull()
 }
