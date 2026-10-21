@@ -5,44 +5,19 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.uchetdohodapro.data.WorkDatabase
@@ -86,11 +61,25 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun IncomeApp() {
-    var selectedTab by remember { mutableIntStateOf(0) }
-    var showAddDialog by remember { mutableStateOf(false) }
-    var showTariffs by remember { mutableStateOf(false) }
-    var showWorkDay by remember { mutableStateOf(false) }
-    var showHistory by remember { mutableStateOf(false) }
+    var selectedTab by remember {
+        mutableIntStateOf(0)
+    }
+
+    var showAddDialog by remember {
+        mutableStateOf(false)
+    }
+
+    var showTariffs by remember {
+        mutableStateOf(false)
+    }
+
+    var showWorkDay by remember {
+        mutableStateOf(false)
+    }
+
+    var showHistory by remember {
+        mutableStateOf(false)
+    }
 
     if (showTariffs) {
         TariffsScreen(
@@ -113,13 +102,18 @@ private fun IncomeApp() {
                 .background(Background)
         ) {
             TextButton(
-                onClick = { showHistory = false },
+                onClick = {
+                    showHistory = false
+                },
                 modifier = Modifier.padding(
                     start = 12.dp,
                     top = 8.dp
                 )
             ) {
-                Text("← Назад", color = Orange)
+                Text(
+                    "← Назад",
+                    color = Orange
+                )
             }
 
             Box(
@@ -146,7 +140,10 @@ private fun IncomeApp() {
                 )
 
                 val symbols = listOf(
-                    "⌂", "▣", "▥", "⚙"
+                    "⌂",
+                    "▣",
+                    "▥",
+                    "⚙"
                 )
 
                 tabs.forEachIndexed { index, title ->
@@ -161,7 +158,11 @@ private fun IncomeApp() {
                                 fontSize = 20.sp,
                                 color = if (
                                     selectedTab == index
-                                ) Orange else SecondaryText
+                                ) {
+                                    Orange
+                                } else {
+                                    SecondaryText
+                                }
                             )
                         },
                         label = {
@@ -267,14 +268,16 @@ private fun HomeScreen(
         dao.observeWorkDays()
     }.collectAsState(initial = emptyList())
 
+    val shifts by remember(dao) {
+        dao.observeShifts()
+    }.collectAsState(initial = emptyList())
+
     val totalIncome = days.sumOf {
         it.calculateIncome()
     }
 
-    val extraHours = days.sumOf {
-        it.hours ?: 0.0
-    }
-
+    val totalShifts = shifts.size
+    val totalWorkDays = days.size
     val recentDays = days.take(3)
 
     fun money(value: Double): String {
@@ -283,18 +286,6 @@ private fun HomeScreen(
             "%.2f ₽",
             value
         )
-    }
-
-    fun number(value: Double): String {
-        return if (value % 1.0 == 0.0) {
-            value.toLong().toString()
-        } else {
-            String.format(
-                Locale.getDefault(),
-                "%.2f",
-                value
-            )
-        }
     }
 
     Column(
@@ -389,23 +380,113 @@ private fun HomeScreen(
         Spacer(Modifier.height(14.dp))
 
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(140.dp),
             horizontalArrangement =
                 Arrangement.spacedBy(12.dp)
         ) {
-            SmallCard(
-                modifier = Modifier.weight(1f),
-                title = "Рабочие дни",
-                value = days.size.toString(),
-                subtitle = "всего"
-            )
+            Card(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = PanelLight
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(10.dp),
+                    horizontalArrangement =
+                        Arrangement.SpaceEvenly,
+                    verticalAlignment =
+                        Alignment.CenterVertically
+                ) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment =
+                            Alignment.CenterHorizontally,
+                        verticalArrangement =
+                            Arrangement.Center
+                    ) {
+                        Text(
+                            "ВСЕГО ВАХТ",
+                            color = SecondaryText,
+                            fontSize = 10.sp,
+                            lineHeight = 12.sp,
+                            textAlign = TextAlign.Center
+                        )
 
-            SmallCard(
-                modifier = Modifier.weight(1f),
-                title = "Доп. часы",
-                value = "${number(extraHours)} ч",
-                subtitle = "для начислений"
-            )
+                        Spacer(Modifier.height(8.dp))
+
+                        Text(
+                            totalShifts.toString(),
+                            color = Orange,
+                            fontSize = 26.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment =
+                            Alignment.CenterHorizontally,
+                        verticalArrangement =
+                            Arrangement.Center
+                    ) {
+                        Text(
+                            "РАБОЧИХ ДНЕЙ",
+                            color = SecondaryText,
+                            fontSize = 10.sp,
+                            lineHeight = 12.sp,
+                            textAlign = TextAlign.Center
+                        )
+
+                        Spacer(Modifier.height(8.dp))
+
+                        Text(
+                            totalWorkDays.toString(),
+                            color = Green,
+                            fontSize = 26.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
+            Card(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = PanelLight
+                )
+            ) {
+                BoxWithConstraints(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    val textSize = (
+                        maxWidth.value / 8.5f
+                    ).coerceIn(16f, 30f)
+
+                    Text(
+                        text = "Кадры 24",
+                        color = Orange,
+                        fontSize = textSize.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
         }
 
         Spacer(Modifier.height(22.dp))
@@ -509,7 +590,8 @@ private fun HomeScreen(
                             day.date,
                             color = MainText,
                             fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold
+                            fontWeight =
+                                FontWeight.SemiBold
                         )
 
                         Text(
@@ -548,49 +630,6 @@ private fun MiniValue(
             fontSize = 15.sp,
             fontWeight = FontWeight.Bold
         )
-    }
-}
-
-@Composable
-private fun SmallCard(
-    modifier: Modifier = Modifier,
-    title: String,
-    value: String,
-    subtitle: String
-) {
-    Card(
-        modifier = modifier,
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = PanelLight
-        )
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Text(
-                title,
-                color = SecondaryText,
-                fontSize = 12.sp
-            )
-
-            Spacer(Modifier.height(8.dp))
-
-            Text(
-                value,
-                color = MainText,
-                fontSize = 25.sp,
-                fontWeight = FontWeight.Bold
-            )
-
-            Spacer(Modifier.height(3.dp))
-
-            Text(
-                subtitle,
-                color = SecondaryText,
-                fontSize = 11.sp
-            )
-        }
     }
 }
 
