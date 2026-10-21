@@ -15,6 +15,7 @@ import androidx.room.Update
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
+import androidx.room.Transaction
 
 @Entity(tableName = "tariffs")
 data class TariffEntity(
@@ -121,6 +122,30 @@ interface WorkDao {
 
     @Update
     suspend fun updateShift(shift: ShiftEntity)
+    
+    @Query(
+        "UPDATE work_days SET shiftId = NULL " +
+        "WHERE shiftId = :shiftId"
+    )
+    suspend fun unassignDaysFromShift(
+        shiftId: Long
+    )
+
+    @Query(
+        "DELETE FROM shifts WHERE id = :shiftId"
+    )
+    suspend fun deleteShiftById(
+        shiftId: Long
+    )
+
+    @Transaction
+    suspend fun deleteShiftSafely(
+        shiftId: Long
+    ) {
+        unassignDaysFromShift(shiftId)
+        deleteShiftById(shiftId)
+    }
+    
 }
 
 @Database(
