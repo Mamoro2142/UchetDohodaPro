@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.uchetdohodapro.data.ShiftEntity
 import com.example.uchetdohodapro.data.WorkDatabase
 import com.example.uchetdohodapro.data.WorkDayEntity
 import kotlinx.coroutines.launch
@@ -45,16 +46,32 @@ fun WorkHistoryScreen() {
         dao.observeWorkDays()
     }.collectAsState(initial = emptyList())
 
-    var editingDay by remember { mutableStateOf<WorkDayEntity?>(null) }
-    var deletingDay by remember { mutableStateOf<WorkDayEntity?>(null) }
-    var saving by remember { mutableStateOf(false) }
-    var operationError by remember { mutableStateOf("") }
+    val shifts by remember(dao) {
+        dao.observeShifts()
+    }.collectAsState(initial = emptyList())
+
+    var editingDay by remember {
+        mutableStateOf<WorkDayEntity?>(null)
+    }
+
+    var deletingDay by remember {
+        mutableStateOf<WorkDayEntity?>(null)
+    }
+
+    var saving by remember {
+        mutableStateOf(false)
+    }
+
+    var operationError by remember {
+        mutableStateOf("")
+    }
 
     if (editingDay != null) {
         val day = editingDay!!
 
         WorkDayEditScreen(
             day = day,
+            shifts = shifts,
             saving = saving,
             onBack = {
                 if (!saving) {
@@ -71,7 +88,8 @@ fun WorkHistoryScreen() {
                             editingDay = null
                             operationError = ""
                         } catch (e: Exception) {
-                            operationError = "Не удалось сохранить изменения."
+                            operationError =
+                                "Не удалось сохранить изменения."
                         } finally {
                             saving = false
                         }
@@ -84,7 +102,9 @@ fun WorkHistoryScreen() {
             error = operationError
         )
     } else {
-        val total = days.sumOf { it.calculateIncome() }
+        val total = days.sumOf {
+            it.calculateIncome()
+        }
 
         Column(
             modifier = Modifier
@@ -107,14 +127,20 @@ fun WorkHistoryScreen() {
                 ),
                 shape = RoundedCornerShape(18.dp)
             ) {
-                Column(Modifier.padding(18.dp)) {
+                Column(
+                    Modifier.padding(18.dp)
+                ) {
                     Text(
                         "Всего заработано",
                         color = HistoryMuted
                     )
 
                     Text(
-                        String.format(Locale.getDefault(), "%.2f ₽", total),
+                        String.format(
+                            Locale.getDefault(),
+                            "%.2f ₽",
+                            total
+                        ),
                         color = HistoryGreen,
                         fontSize = 30.sp,
                         fontWeight = FontWeight.Bold
@@ -132,7 +158,7 @@ fun WorkHistoryScreen() {
             Spacer(Modifier.height(12.dp))
 
             Text(
-                "Нажми на рабочий день, чтобы изменить или удалить его.",
+                "Нажми на рабочий день, чтобы изменить его или выбрать вахту.",
                 color = HistoryMuted,
                 fontSize = 12.sp
             )
@@ -146,9 +172,13 @@ fun WorkHistoryScreen() {
                 )
             } else {
                 LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    verticalArrangement =
+                        Arrangement.spacedBy(10.dp)
                 ) {
-                    items(days, key = { it.id }) { day ->
+                    items(
+                        days,
+                        key = { it.id }
+                    ) { day ->
                         WorkHistoryCard(
                             day = day,
                             onClick = {
@@ -167,11 +197,16 @@ fun WorkHistoryScreen() {
 
         AlertDialog(
             onDismissRequest = {
-                if (!saving) deletingDay = null
+                if (!saving) {
+                    deletingDay = null
+                }
             },
             containerColor = HistoryPanel,
             title = {
-                Text("Удалить рабочий день?", color = HistoryText)
+                Text(
+                    "Удалить рабочий день?",
+                    color = HistoryText
+                )
             },
             text = {
                 Text(
@@ -187,13 +222,16 @@ fun WorkHistoryScreen() {
                             saving = true
                             scope.launch {
                                 try {
-                                    dao.deleteWorkDay(dayToDelete.id)
+                                    dao.deleteWorkDay(
+                                        dayToDelete.id
+                                    )
                                     deletingDay = null
                                     editingDay = null
                                     operationError = ""
                                 } catch (e: Exception) {
                                     deletingDay = null
-                                    operationError = "Не удалось удалить запись."
+                                    operationError =
+                                        "Не удалось удалить запись."
                                 } finally {
                                     saving = false
                                 }
@@ -211,9 +249,14 @@ fun WorkHistoryScreen() {
             dismissButton = {
                 TextButton(
                     enabled = !saving,
-                    onClick = { deletingDay = null }
+                    onClick = {
+                        deletingDay = null
+                    }
                 ) {
-                    Text("Отмена", color = HistoryText)
+                    Text(
+                        "Отмена",
+                        color = HistoryText
+                    )
                 }
             }
         )
@@ -234,7 +277,9 @@ private fun WorkHistoryCard(
         ),
         shape = RoundedCornerShape(16.dp)
     ) {
-        Column(Modifier.padding(16.dp)) {
+        Column(
+            Modifier.padding(16.dp)
+        ) {
             Text(
                 day.date,
                 color = HistoryText,
@@ -257,20 +302,56 @@ private fun WorkHistoryCard(
 
             Spacer(Modifier.height(8.dp))
 
+            Text(
+                if (day.shiftId != null) {
+                    "Вахта №${day.shiftId}"
+                } else {
+                    "Без привязки к вахте"
+                },
+                color = if (day.shiftId != null) {
+                    HistoryOrange
+                } else {
+                    HistoryMuted
+                },
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            Spacer(Modifier.height(8.dp))
+
             if (day.picks != null) {
-                Text("Пики: ${day.picks}", color = HistoryText)
+                Text(
+                    "Пики: ${day.picks}",
+                    color = HistoryText
+                )
             }
+
             if (day.weight != null) {
-                Text("Вес: ${day.weight}", color = HistoryText)
+                Text(
+                    "Вес: ${day.weight}",
+                    color = HistoryText
+                )
             }
+
             if (day.volume != null) {
-                Text("Объём: ${day.volume}", color = HistoryText)
+                Text(
+                    "Объём: ${day.volume}",
+                    color = HistoryText
+                )
             }
+
             if (day.boxes != null) {
-                Text("Коробки: ${day.boxes}", color = HistoryText)
+                Text(
+                    "Коробки: ${day.boxes}",
+                    color = HistoryText
+                )
             }
+
             if (day.hours != null) {
-                Text("Часы: ${day.hours}", color = HistoryText)
+                Text(
+                    "Часы: ${day.hours}",
+                    color = HistoryText
+                )
             }
         }
     }
@@ -279,19 +360,48 @@ private fun WorkHistoryCard(
 @Composable
 private fun WorkDayEditScreen(
     day: WorkDayEntity,
+    shifts: List<ShiftEntity>,
     saving: Boolean,
     onBack: () -> Unit,
     onSave: (WorkDayEntity) -> Unit,
     onDelete: () -> Unit,
     error: String
 ) {
-    var date by remember(day.id) { mutableStateOf(day.date) }
-    var picks by remember(day.id) { mutableStateOf(day.picks.toInputText()) }
-    var weight by remember(day.id) { mutableStateOf(day.weight.toInputText()) }
-    var volume by remember(day.id) { mutableStateOf(day.volume.toInputText()) }
-    var boxes by remember(day.id) { mutableStateOf(day.boxes.toInputText()) }
-    var hours by remember(day.id) { mutableStateOf(day.hours.toInputText()) }
-    var validationError by remember(day.id) { mutableStateOf("") }
+    var date by remember(day.id) {
+        mutableStateOf(day.date)
+    }
+
+    var picks by remember(day.id) {
+        mutableStateOf(day.picks.toInputText())
+    }
+
+    var weight by remember(day.id) {
+        mutableStateOf(day.weight.toInputText())
+    }
+
+    var volume by remember(day.id) {
+        mutableStateOf(day.volume.toInputText())
+    }
+
+    var boxes by remember(day.id) {
+        mutableStateOf(day.boxes.toInputText())
+    }
+
+    var hours by remember(day.id) {
+        mutableStateOf(day.hours.toInputText())
+    }
+
+    var selectedShiftId by remember(day.id) {
+        mutableStateOf(day.shiftId)
+    }
+
+    var showShiftPicker by remember {
+        mutableStateOf(false)
+    }
+
+    var validationError by remember(day.id) {
+        mutableStateOf("")
+    }
 
     val income =
         (picks.toDoubleOrNull() ?: 0.0) * day.picksRate +
@@ -327,18 +437,51 @@ private fun WorkDayEditScreen(
 
         OutlinedTextField(
             value = date,
-            onValueChange = { date = it },
-            label = { Text("Дата (ГГГГ-ММ-ДД)") },
+            onValueChange = {
+                date = it
+            },
+            label = {
+                Text("Дата (ГГГГ-ММ-ДД)")
+            },
             singleLine = true,
             enabled = !saving,
             modifier = Modifier.fillMaxWidth()
         )
 
-        HistoryNumberField("Пики", picks, { picks = it }, !saving)
-        HistoryNumberField("Вес", weight, { weight = it }, !saving)
-        HistoryNumberField("Объём", volume, { volume = it }, !saving)
-        HistoryNumberField("Коробки", boxes, { boxes = it }, !saving)
-        HistoryNumberField("Часы", hours, { hours = it }, !saving)
+        HistoryNumberField(
+            "Пики",
+            picks,
+            { picks = it },
+            !saving
+        )
+
+        HistoryNumberField(
+            "Вес",
+            weight,
+            { weight = it },
+            !saving
+        )
+
+        HistoryNumberField(
+            "Объём",
+            volume,
+            { volume = it },
+            !saving
+        )
+
+        HistoryNumberField(
+            "Коробки",
+            boxes,
+            { boxes = it },
+            !saving
+        )
+
+        HistoryNumberField(
+            "Часы",
+            hours,
+            { hours = it },
+            !saving
+        )
 
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -347,10 +490,65 @@ private fun WorkDayEditScreen(
             ),
             shape = RoundedCornerShape(16.dp)
         ) {
-            Column(Modifier.padding(16.dp)) {
-                Text("Заработок за день", color = HistoryMuted)
+            Column(
+                Modifier.padding(16.dp)
+            ) {
                 Text(
-                    String.format(Locale.getDefault(), "%.2f ₽", income),
+                    "ПРИВЯЗКА К ВАХТЕ",
+                    color = HistoryMuted,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                Text(
+                    if (selectedShiftId != null) {
+                        "Вахта №$selectedShiftId"
+                    } else {
+                        "Без привязки"
+                    },
+                    color = HistoryOrange,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(Modifier.height(12.dp))
+
+                OutlinedButton(
+                    onClick = {
+                        showShiftPicker = true
+                    },
+                    enabled = !saving,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Выбрать вахту")
+                }
+            }
+        }
+
+        
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = HistoryPanel
+            ),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(
+                Modifier.padding(16.dp)
+            ) {
+                Text(
+                    "Заработок за день",
+                    color = HistoryMuted
+                )
+
+                Text(
+                    String.format(
+                        Locale.getDefault(),
+                        "%.2f ₽",
+                        income
+                    ),
                     color = HistoryGreen,
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold
@@ -365,11 +563,17 @@ private fun WorkDayEditScreen(
         )
 
         if (validationError.isNotBlank()) {
-            Text(validationError, color = HistoryRed)
+            Text(
+                validationError,
+                color = HistoryRed
+            )
         }
 
         if (error.isNotBlank()) {
-            Text(error, color = HistoryRed)
+            Text(
+                error,
+                color = HistoryRed
+            )
         }
 
         Button(
@@ -391,20 +595,27 @@ private fun WorkDayEditScreen(
                 }.getOrNull()
 
                 val inputs = listOf(
-                    picks, weight, volume, boxes, hours
+                    picks,
+                    weight,
+                    volume,
+                    boxes,
+                    hours
                 )
 
                 val invalid = inputs.any { value ->
+                    val number = value.toDoubleOrNull()
+
                     value.isNotBlank() &&
                         (
-                            value.toDoubleOrNull() == null ||
-                            !value.toDoubleOrNull()!!.isFinite() ||
-                            value.toDoubleOrNull()!! < 0.0
+                            number == null ||
+                            !number.isFinite() ||
+                            number < 0.0
                         )
                 }
 
                 when {
-                    parsedDate == null || parsedDate != date -> {
+                    parsedDate == null ||
+                        parsedDate != date -> {
                         validationError =
                             "Укажи правильную дату в формате ГГГГ-ММ-ДД."
                     }
@@ -412,6 +623,14 @@ private fun WorkDayEditScreen(
                     invalid -> {
                         validationError =
                             "Показатели должны быть числами не меньше нуля."
+                    }
+
+                    selectedShiftId != null &&
+                        shifts.none {
+                            it.id == selectedShiftId
+                        } -> {
+                        validationError =
+                            "Выбранная вахта больше не существует."
                     }
 
                     else -> {
@@ -424,7 +643,8 @@ private fun WorkDayEditScreen(
                                 weight = weight.toOptionalNumber(),
                                 volume = volume.toOptionalNumber(),
                                 boxes = boxes.toOptionalNumber(),
-                                hours = hours.toOptionalNumber()
+                                hours = hours.toOptionalNumber(),
+                                shiftId = selectedShiftId
                             )
                         )
                     }
@@ -439,7 +659,11 @@ private fun WorkDayEditScreen(
             shape = RoundedCornerShape(12.dp)
         ) {
             Text(
-                if (saving) "СОХРАНЯЕМ..." else "СОХРАНИТЬ ИЗМЕНЕНИЯ",
+                if (saving) {
+                    "СОХРАНЯЕМ..."
+                } else {
+                    "СОХРАНИТЬ ИЗМЕНЕНИЯ"
+                },
                 fontWeight = FontWeight.Bold
             )
         }
@@ -455,6 +679,68 @@ private fun WorkDayEditScreen(
             Text("Удалить рабочий день")
         }
     }
+
+    if (showShiftPicker) {
+        AlertDialog(
+            onDismissRequest = {
+                showShiftPicker = false
+            },
+            containerColor = HistoryPanel,
+            title = {
+                Text(
+                    "Выбрать вахту",
+                    color = HistoryText
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = 350.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement =
+                        Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            selectedShiftId = null
+                            showShiftPicker = false
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Без привязки")
+                    }
+
+                    shifts.forEach { shift ->
+                        OutlinedButton(
+                            onClick = {
+                                selectedShiftId = shift.id
+                                showShiftPicker = false
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                "Вахта №${shift.id}" +
+                                    if (shift.isActive) {
+                                        " (активна)"
+                                    } else {
+                                        " (завершена)"
+                                    }
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showShiftPicker = false
+                    }
+                ) {
+                    Text("Закрыть")
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -467,7 +753,9 @@ private fun HistoryNumberField(
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
-        label = { Text(label) },
+        label = {
+            Text(label)
+        },
         singleLine = true,
         enabled = enabled,
         keyboardOptions = KeyboardOptions(
@@ -488,5 +776,9 @@ private fun Double?.toInputText(): String {
 }
 
 private fun String.toOptionalNumber(): Double? {
-    return if (isBlank()) null else toDoubleOrNull()
+    return if (isBlank()) {
+        null
+    } else {
+        toDoubleOrNull()
+    }
 }
