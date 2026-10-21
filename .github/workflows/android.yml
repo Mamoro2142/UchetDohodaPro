@@ -43,7 +43,15 @@ jobs:
           chmod 600 "$RUNNER_TEMP/uchet-pro.jks"
 
           test -s "$RUNNER_TEMP/uchet-pro.jks"
-
+          
+      - name: Check ShiftScreen source
+        run: |
+          echo "Checking source files..."
+          ls -la app/src/main/java/com/example/uchetdohodapro/
+          echo "Checking ShiftScreen.kt..."
+          test -f app/src/main/java/com/example/uchetdohodapro/ShiftScreen.kt
+          grep -n "package\|fun ShiftScreen" app/src/main/java/com/example/uchetdohodapro/ShiftScreen.kt
+          
       - name: Build signed APK
         env:
           ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/uchet-pro.jks
