@@ -40,7 +40,8 @@ data class WorkDayEntity(
     val weightRate: Double = 0.0,
     val volumeRate: Double = 0.0,
     val boxesRate: Double = 0.0,
-    val hoursRate: Double = 0.0
+    val hoursRate: Double = 0.0,
+    val shiftId: Long? = null
 ) {
     fun calculateIncome(): Double {
         return (picks ?: 0.0) * picksRate +
@@ -62,6 +63,7 @@ data class ShiftEntity(
 
 @Dao
 interface WorkDao {
+
     @Query("SELECT * FROM tariffs WHERE id = 1 LIMIT 1")
     fun observeTariffs(): Flow<TariffEntity?>
 
@@ -83,7 +85,32 @@ interface WorkDao {
     @Query("SELECT * FROM work_days WHERE id = :dayId LIMIT 1")
     suspend fun getWorkDay(dayId: Long): WorkDayEntity?
 
-    @Query("SELECT * FROM shifts ORDER BY startDate DESC, id DESC")
+    @Query(
+        "SELECT * FROM work_days " +
+        "WHERE shiftId = :shiftId " +
+        "ORDER BY date DESC, id DESC"
+    )
+    fun observeWorkDaysForShift(
+        shiftId: Long
+    ): Flow<List<WorkDayEntity>>
+
+    @Query(
+        "SELECT * FROM work_days " +
+        "WHERE shiftId IS NULL " +
+        "ORDER BY date DESC, id DESC"
+    )
+    fun observeUnassignedWorkDays(): Flow<List<WorkDayEntity>>
+
+    @Query(
+        "UPDATE work_days SET shiftId = :shiftId " +
+        "WHERE id = :dayId"
+    )
+    suspend fun assignWorkDayToShift(
+        dayId: Long,
+        shiftId: Long?
+    )
+
+    @Query("SELECT * FROM shifts ORDER BY id DESC")
     fun observeShifts(): Flow<List<ShiftEntity>>
 
     @Query("SELECT * FROM shifts WHERE isActive = 1 LIMIT 1")
@@ -102,7 +129,7 @@ interface WorkDao {
         WorkDayEntity::class,
         ShiftEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class WorkDatabase : RoomDatabase() {
@@ -110,6 +137,7 @@ abstract class WorkDatabase : RoomDatabase() {
     abstract fun workDao(): WorkDao
 
     companion object {
+
         @Volatile
         private var INSTANCE: WorkDatabase? = null
 
@@ -128,6 +156,17 @@ abstract class WorkDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    ALTER TABLE `work_days`
+                    ADD COLUMN `shiftId` INTEGER
+                    """.trimIndent()
+                )
+            }
+        }
+
         fun getInstance(context: Context): WorkDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -135,7 +174,10 @@ abstract class WorkDatabase : RoomDatabase() {
                     WorkDatabase::class.java,
                     "uchet_dohoda.db"
                 )
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(
+                        MIGRATION_1_2,
+                        MIGRATION_2_3
+                    )
                     .build()
                     .also { INSTANCE = it }
             }
