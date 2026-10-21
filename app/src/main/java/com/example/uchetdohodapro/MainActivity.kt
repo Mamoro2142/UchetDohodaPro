@@ -1,3 +1,4 @@
+
 package com.example.uchetdohodapro
 
 import android.os.Bundle
@@ -7,26 +8,31 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -35,14 +41,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.runtime.collectAsState
-import androidx.compose.ui.platform.LocalContext
 import com.example.uchetdohodapro.data.WorkDatabase
 import java.util.Locale
-import androidx.compose.foundation.verticalScroll
 
 private val Background = Color(0xFF111315)
 private val Panel = Color(0xFF1C2023)
@@ -86,6 +90,7 @@ private fun IncomeApp() {
     var showAddDialog by remember { mutableStateOf(false) }
     var showTariffs by remember { mutableStateOf(false) }
     var showWorkDay by remember { mutableStateOf(false) }
+    var showHistory by remember { mutableStateOf(false) }
 
     if (showTariffs) {
         TariffsScreen(
@@ -93,12 +98,37 @@ private fun IncomeApp() {
         )
         return
     }
-    
+
     if (showWorkDay) {
-    WorkDayScreen(
-        onBack = { showWorkDay = false }
-    )
-    return
+        WorkDayScreen(
+            onBack = { showWorkDay = false }
+        )
+        return
+    }
+
+    if (showHistory) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Background)
+        ) {
+            TextButton(
+                onClick = { showHistory = false },
+                modifier = Modifier.padding(
+                    start = 12.dp,
+                    top = 8.dp
+                )
+            ) {
+                Text("← Назад", color = Orange)
+            }
+
+            Box(
+                modifier = Modifier.weight(1f)
+            ) {
+                WorkHistoryScreen()
+            }
+        }
+        return
     }
 
     Scaffold(
@@ -114,22 +144,31 @@ private fun IncomeApp() {
                     "Статистика",
                     "Профиль"
                 )
-                val symbols = listOf("⌂", "▣", "▥", "⚙")
+
+                val symbols = listOf(
+                    "⌂", "▣", "▥", "⚙"
+                )
 
                 tabs.forEachIndexed { index, title ->
                     NavigationBarItem(
                         selected = selectedTab == index,
-                        onClick = { selectedTab = index },
+                        onClick = {
+                            selectedTab = index
+                        },
                         icon = {
                             Text(
                                 text = symbols[index],
                                 fontSize = 20.sp,
-                                color = if (selectedTab == index) Orange
-                                else SecondaryText
+                                color = if (
+                                    selectedTab == index
+                                ) Orange else SecondaryText
                             )
                         },
                         label = {
-                            Text(text = title, fontSize = 10.sp)
+                            Text(
+                                text = title,
+                                fontSize = 10.sp
+                            )
                         }
                     )
                 }
@@ -144,62 +183,82 @@ private fun IncomeApp() {
         ) {
             when (selectedTab) {
                 0 -> HomeScreen(
-                    onAddClick = { showAddDialog = true }
+                    onAddClick = {
+                        showAddDialog = true
+                    },
+                    onHistoryClick = {
+                        showHistory = true
+                    }
                 )
 
-                1 -> WorkHistoryScreen()
+                1 -> ShiftScreen()
 
                 2 -> StatisticsScreen()
 
                 else -> ProfileScreen(
-                    onTariffsClick = { showTariffs = true }
+                    onTariffsClick = {
+                        showTariffs = true
+                    }
                 )
             }
         }
     }
 
     if (showAddDialog) {
-    AlertDialog(
-        onDismissRequest = { showAddDialog = false },
-        containerColor = Panel,
-        title = {
-            Text("Новый рабочий день", color = MainText)
-        },
-        text = {
-            Text(
-                "Открыть форму для ввода показателей рабочего дня?",
-                color = SecondaryText
-            )
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    showAddDialog = false
-                    showWorkDay = true
-                },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Orange,
-                    contentColor = Color.Black
+        AlertDialog(
+            onDismissRequest = {
+                showAddDialog = false
+            },
+            containerColor = Panel,
+            title = {
+                Text(
+                    "Новый рабочий день",
+                    color = MainText
                 )
-            ) {
-                Text("Открыть форму")
+            },
+            text = {
+                Text(
+                    "Открыть форму для ввода показателей рабочего дня?",
+                    color = SecondaryText
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showAddDialog = false
+                        showWorkDay = true
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Orange,
+                        contentColor = Color.Black
+                    )
+                ) {
+                    Text("Открыть форму")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showAddDialog = false
+                    }
+                ) {
+                    Text(
+                        "Отмена",
+                        color = MainText
+                    )
+                }
             }
-        },
-        dismissButton = {
-            TextButton(
-                onClick = { showAddDialog = false }
-            ) {
-                Text("Отмена", color = MainText)
-            }
-        }
-    )
+        )
+    }
 }
-}
-
 
 @Composable
-private fun HomeScreen(onAddClick: () -> Unit) {
+private fun HomeScreen(
+    onAddClick: () -> Unit,
+    onHistoryClick: () -> Unit
+) {
     val context = LocalContext.current
+
     val dao = remember(context) {
         WorkDatabase.getInstance(context).workDao()
     }
@@ -208,19 +267,33 @@ private fun HomeScreen(onAddClick: () -> Unit) {
         dao.observeWorkDays()
     }.collectAsState(initial = emptyList())
 
-    val totalIncome = days.sumOf { it.calculateIncome() }
-    val totalHours = days.sumOf { it.hours ?: 0.0 }
+    val totalIncome = days.sumOf {
+        it.calculateIncome()
+    }
+
+    val extraHours = days.sumOf {
+        it.hours ?: 0.0
+    }
+
     val recentDays = days.take(3)
 
     fun money(value: Double): String {
-        return String.format(Locale.getDefault(), "%.2f ₽", value)
+        return String.format(
+            Locale.getDefault(),
+            "%.2f ₽",
+            value
+        )
     }
 
     fun number(value: Double): String {
         return if (value % 1.0 == 0.0) {
             value.toLong().toString()
         } else {
-            String.format(Locale.getDefault(), "%.2f", value)
+            String.format(
+                Locale.getDefault(),
+                "%.2f",
+                value
+            )
         }
     }
 
@@ -228,10 +301,11 @@ private fun HomeScreen(onAddClick: () -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .background(Background)
-            .verticalScroll(
-                androidx.compose.foundation.rememberScrollState()
+            .verticalScroll(rememberScrollState())
+            .padding(
+                horizontal = 20.dp,
+                vertical = 18.dp
             )
-            .padding(horizontal = 20.dp, vertical = 18.dp)
     ) {
         Text(
             "УЧЁТ ДОХОДА",
@@ -265,7 +339,9 @@ private fun HomeScreen(onAddClick: () -> Unit) {
                 containerColor = Panel
             )
         ) {
-            Column(Modifier.padding(20.dp)) {
+            Column(
+                modifier = Modifier.padding(20.dp)
+            ) {
                 Text(
                     "ЗАРАБОТАНО ВСЕГО",
                     color = SecondaryText,
@@ -284,9 +360,10 @@ private fun HomeScreen(onAddClick: () -> Unit) {
 
                 Spacer(Modifier.height(16.dp))
 
-                androidx.compose.foundation.layout.Row(
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement =
+                        Arrangement.SpaceBetween
                 ) {
                     MiniValue(
                         "Начислено",
@@ -311,9 +388,10 @@ private fun HomeScreen(onAddClick: () -> Unit) {
 
         Spacer(Modifier.height(14.dp))
 
-        androidx.compose.foundation.layout.Row(
+        Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement =
+                Arrangement.spacedBy(12.dp)
         ) {
             SmallCard(
                 modifier = Modifier.weight(1f),
@@ -324,9 +402,9 @@ private fun HomeScreen(onAddClick: () -> Unit) {
 
             SmallCard(
                 modifier = Modifier.weight(1f),
-                title = "Отработано",
-                value = "${number(totalHours)} ч",
-                subtitle = "всего часов"
+                title = "Доп. часы",
+                value = "${number(extraHours)} ч",
+                subtitle = "для начислений"
             )
         }
 
@@ -347,6 +425,23 @@ private fun HomeScreen(onAddClick: () -> Unit) {
                 "+  Добавить рабочий день",
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold
+            )
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        OutlinedButton(
+            onClick = onHistoryClick,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Text(
+                "История рабочих дней",
+                fontSize = 15.sp,
+                color = Orange,
+                fontWeight = FontWeight.SemiBold
             )
         }
 
@@ -374,7 +469,8 @@ private fun HomeScreen(onAddClick: () -> Unit) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(18.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                    horizontalAlignment =
+                        Alignment.CenterHorizontally
                 ) {
                     Text(
                         "Пока нет записей",
@@ -400,12 +496,14 @@ private fun HomeScreen(onAddClick: () -> Unit) {
                         containerColor = Panel
                     )
                 ) {
-                    androidx.compose.foundation.layout.Row(
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(18.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        horizontalArrangement =
+                            Arrangement.SpaceBetween,
+                        verticalAlignment =
+                            Alignment.CenterVertically
                     ) {
                         Text(
                             day.date,
@@ -429,7 +527,6 @@ private fun HomeScreen(onAddClick: () -> Unit) {
     }
 }
 
-
 @Composable
 private fun MiniValue(
     title: String,
@@ -437,8 +534,14 @@ private fun MiniValue(
     color: Color
 ) {
     Column {
-        Text(title, color = SecondaryText, fontSize = 11.sp)
+        Text(
+            title,
+            color = SecondaryText,
+            fontSize = 11.sp
+        )
+
         Spacer(Modifier.height(4.dp))
+
         Text(
             value,
             color = color,
@@ -458,86 +561,43 @@ private fun SmallCard(
     Card(
         modifier = modifier,
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = PanelLight)
+        colors = CardDefaults.cardColors(
+            containerColor = PanelLight
+        )
     ) {
-        Column(Modifier.padding(16.dp)) {
-            Text(title, color = SecondaryText, fontSize = 12.sp)
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Text(
+                title,
+                color = SecondaryText,
+                fontSize = 12.sp
+            )
+
             Spacer(Modifier.height(8.dp))
+
             Text(
                 value,
                 color = MainText,
                 fontSize = 25.sp,
                 fontWeight = FontWeight.Bold
             )
+
             Spacer(Modifier.height(3.dp))
-            Text(subtitle, color = SecondaryText, fontSize = 11.sp)
+
+            Text(
+                subtitle,
+                color = SecondaryText,
+                fontSize = 11.sp
+            )
         }
     }
 }
 
 @Composable
-private fun SimpleScreen(
-    title: String,
-    subtitle: String,
-    symbol: String
+private fun ProfileScreen(
+    onTariffsClick: () -> Unit
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(22.dp),
-        horizontalAlignment = Alignment.Start
-    ) {
-        Text(
-            "УЧЁТ ДОХОДА",
-            color = Orange,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 2.sp
-        )
-
-        Spacer(Modifier.height(8.dp))
-
-        Text(
-            title,
-            color = MainText,
-            fontSize = 29.sp,
-            fontWeight = FontWeight.Bold
-        )
-
-        Spacer(Modifier.height(20.dp))
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(22.dp),
-            colors = CardDefaults.cardColors(containerColor = Panel)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(symbol, color = Orange, fontSize = 38.sp)
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    subtitle,
-                    color = MainText,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "Этот раздел подключим на следующем этапе.",
-                    color = SecondaryText,
-                    fontSize = 13.sp
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ProfileScreen(onTariffsClick: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -565,9 +625,13 @@ private fun ProfileScreen(onTariffsClick: () -> Unit) {
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = Panel)
+            colors = CardDefaults.cardColors(
+                containerColor = Panel
+            )
         ) {
-            Column(Modifier.padding(18.dp)) {
+            Column(
+                modifier = Modifier.padding(18.dp)
+            ) {
                 Text(
                     "Расчёт заработка",
                     color = MainText,
@@ -607,9 +671,13 @@ private fun ProfileScreen(onTariffsClick: () -> Unit) {
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = Panel)
+            colors = CardDefaults.cardColors(
+                containerColor = Panel
+            )
         ) {
-            Column(Modifier.padding(18.dp)) {
+            Column(
+                modifier = Modifier.padding(18.dp)
+            ) {
                 Text(
                     "Резервная копия",
                     color = MainText,
