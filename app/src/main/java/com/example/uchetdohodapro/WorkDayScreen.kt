@@ -1,3 +1,4 @@
+
 package com.example.uchetdohodapro
 
 import androidx.compose.foundation.layout.*
@@ -25,11 +26,18 @@ import java.util.Locale
 @Composable
 fun WorkDayScreen(onBack: () -> Unit = {}) {
     val context = LocalContext.current
-    val dao = remember { WorkDatabase.getInstance(context).workDao() }
+    val dao = remember(context) {
+        WorkDatabase.getInstance(context).workDao()
+    }
     val scope = rememberCoroutineScope()
 
     var date by remember {
-        mutableStateOf(SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()))
+        mutableStateOf(
+            SimpleDateFormat(
+                "yyyy-MM-dd",
+                Locale.getDefault()
+            ).format(Date())
+        )
     }
 
     var picks by remember { mutableStateOf("") }
@@ -38,22 +46,46 @@ fun WorkDayScreen(onBack: () -> Unit = {}) {
     var boxes by remember { mutableStateOf("") }
     var hours by remember { mutableStateOf("") }
 
-    var tariffs by remember { mutableStateOf<TariffEntity?>(null) }
+    var tariffs by remember {
+        mutableStateOf<TariffEntity?>(null)
+    }
+
+    var activeShiftId by remember {
+        mutableStateOf<Long?>(null)
+    }
+
     var error by remember { mutableStateOf("") }
     var saved by remember { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) {
-    dao.observeTariffs().collect { value ->
-        tariffs = value
+    var saving by remember { mutableStateOf(false) }
+    var savedShiftId by remember {
+        mutableStateOf<Long?>(null)
     }
-}
+
+    LaunchedEffect(dao) {
+        dao.observeTariffs().collect { value ->
+            tariffs = value
+        }
+    }
+
+    LaunchedEffect(dao) {
+        dao.observeShifts().collect { shifts ->
+            activeShiftId = shifts.firstOrNull {
+                it.isActive
+            }?.id
+        }
+    }
 
     val income =
-        (picks.toDoubleOrNull() ?: 0.0) * (tariffs?.picksRate ?: 0.0) +
-        (weight.toDoubleOrNull() ?: 0.0) * (tariffs?.weightRate ?: 0.0) +
-        (volume.toDoubleOrNull() ?: 0.0) * (tariffs?.volumeRate ?: 0.0) +
-        (boxes.toDoubleOrNull() ?: 0.0) * (tariffs?.boxesRate ?: 0.0) +
-        (hours.toDoubleOrNull() ?: 0.0) * (tariffs?.hoursRate ?: 0.0)
+        (picks.toDoubleOrNull() ?: 0.0) *
+            (tariffs?.picksRate ?: 0.0) +
+        (weight.toDoubleOrNull() ?: 0.0) *
+            (tariffs?.weightRate ?: 0.0) +
+        (volume.toDoubleOrNull() ?: 0.0) *
+            (tariffs?.volumeRate ?: 0.0) +
+        (boxes.toDoubleOrNull() ?: 0.0) *
+            (tariffs?.boxesRate ?: 0.0) +
+        (hours.toDoubleOrNull() ?: 0.0) *
+            (tariffs?.hoursRate ?: 0.0)
 
     Column(
         modifier = Modifier
@@ -79,19 +111,111 @@ fun WorkDayScreen(onBack: () -> Unit = {}) {
             fontWeight = FontWeight.Bold
         )
 
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = Color(0xFF202428)
+            ),
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp)
+            ) {
+                Text(
+                    "ПРИВЯЗКА К ВАХТЕ",
+                    color = Color(0xFFB8BEC3),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(Modifier.height(6.dp))
+
+                Text(
+                    if (activeShiftId != null) {
+                        "Активная вахта №$activeShiftId"
+                    } else {
+                        "Нет активной вахты"
+                    },
+                    color = if (activeShiftId != null) {
+                        Color(0xFF43D17D)
+                    } else {
+                        Color(0xFFFF9800)
+                    },
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                Spacer(Modifier.height(4.dp))
+
+                Text(
+                    if (activeShiftId != null) {
+                        "Рабочий день будет автоматически привязан к этой вахте."
+                    } else {
+                        "Рабочий день сохранится без привязки к вахте."
+                    },
+                    color = Color(0xFFB8BEC3),
+                    fontSize = 12.sp
+                )
+            }
+        }
+
         OutlinedTextField(
             value = date,
-            onValueChange = { date = it; saved = false },
-            label = { Text("Дата (ГГГГ-ММ-ДД)") },
+            onValueChange = {
+                date = it
+                saved = false
+            },
+            label = {
+                Text("Дата (ГГГГ-ММ-ДД)")
+            },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
 
-        WorkDayNumberField("Пики", picks, { picks = it; saved = false })
-        WorkDayNumberField("Вес", weight, { weight = it; saved = false })
-        WorkDayNumberField("Объём", volume, { volume = it; saved = false })
-        WorkDayNumberField("Боксы", boxes, { boxes = it; saved = false })
-        WorkDayNumberField("Часы", hours, { hours = it; saved = false })
+        WorkDayNumberField(
+            "Пики",
+            picks,
+            {
+                picks = it
+                saved = false
+            }
+        )
+
+        WorkDayNumberField(
+            "Вес",
+            weight,
+            {
+                weight = it
+                saved = false
+            }
+        )
+
+        WorkDayNumberField(
+            "Объём",
+            volume,
+            {
+                volume = it
+                saved = false
+            }
+        )
+
+        WorkDayNumberField(
+            "Боксы",
+            boxes,
+            {
+                boxes = it
+                saved = false
+            }
+        )
+
+        WorkDayNumberField(
+            "Часы",
+            hours,
+            {
+                hours = it
+                saved = false
+            }
+        )
 
         Card(
             colors = CardDefaults.cardColors(
@@ -100,10 +224,20 @@ fun WorkDayScreen(onBack: () -> Unit = {}) {
             shape = RoundedCornerShape(16.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Column(Modifier.padding(16.dp)) {
-                Text("Предварительный заработок", color = Color(0xFFB8BEC3))
+            Column(
+                modifier = Modifier.padding(16.dp)
+            ) {
                 Text(
-                    String.format(Locale.getDefault(), "%.2f", income),
+                    "Предварительный заработок",
+                    color = Color(0xFFB8BEC3)
+                )
+
+                Text(
+                    String.format(
+                        Locale.getDefault(),
+                        "%.2f ₽",
+                        income
+                    ),
                     color = Color(0xFF4CAF50),
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold
@@ -119,56 +253,124 @@ fun WorkDayScreen(onBack: () -> Unit = {}) {
         }
 
         if (error.isNotBlank()) {
-            Text(error, color = Color(0xFFFF5252))
+            Text(
+                error,
+                color = Color(0xFFFF5252)
+            )
         }
 
         if (saved) {
-            Text("Рабочий день сохранён!", color = Color(0xFF4CAF50))
+            Text(
+                if (savedShiftId != null) {
+                    "Рабочий день сохранён в вахту №$savedShiftId!"
+                } else {
+                    "Рабочий день сохранён без привязки к вахте!"
+                },
+                color = Color(0xFF43D17D)
+            )
         }
 
         Button(
             onClick = {
+                val parser = SimpleDateFormat(
+                    "yyyy-MM-dd",
+                    Locale.getDefault()
+                ).apply {
+                    isLenient = false
+                }
+
                 val parsedDate = runCatching {
-                    val parser = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-                    parser.isLenient = false
                     parser.parse(date)?.let {
-                        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(it)
+                        parser.format(it)
                     }
                 }.getOrNull()
 
-                val values = listOf(picks, weight, volume, boxes, hours)
-                val invalid = values.any {
-                    it.isNotBlank() && (it.toDoubleOrNull() == null || it.toDoubleOrNull()!! < 0)
+                val values = listOf(
+                    picks, weight, volume, boxes, hours
+                )
+
+                val invalid = values.any { value ->
+                    val number = value.toDoubleOrNull()
+                    value.isNotBlank() &&
+                        (number == null ||
+                         !number.isFinite() ||
+                         number < 0)
                 }
 
-                if (parsedDate == null) {
-                    error = "Укажи дату в формате ГГГГ-ММ-ДД."
-                } else if (invalid) {
-                    error = "Показатели должны быть числами не меньше нуля."
-                } else if (tariffs == null) {
-                    error = "Сначала настрой и сохрани тарифы."
-                } else {
-                    error = ""
-                    scope.launch {
-                        dao.insertWorkDay(
-                            WorkDayEntity(
-                                date = parsedDate,
-                                picks = picks.takeIf { it.isNotBlank() }?.toDouble(),
-                                weight = weight.takeIf { it.isNotBlank() }?.toDouble(),
-                                volume = volume.takeIf { it.isNotBlank() }?.toDouble(),
-                                boxes = boxes.takeIf { it.isNotBlank() }?.toDouble(),
-                                hours = hours.takeIf { it.isNotBlank() }?.toDouble(),
-                                picksRate = tariffs!!.picksRate,
-                                weightRate = tariffs!!.weightRate,
-                                volumeRate = tariffs!!.volumeRate,
-                                boxesRate = tariffs!!.boxesRate,
-                                hoursRate = tariffs!!.hoursRate
-                            )
-                        )
-                        saved = true
+                val currentTariffs = tariffs
+
+                when {
+                    parsedDate == null -> {
+                        error =
+                            "Укажи дату в формате ГГГГ-ММ-ДД."
+                    }
+
+                    invalid -> {
+                        error =
+                            "Показатели должны быть числами не меньше нуля."
+                    }
+
+                    currentTariffs == null -> {
+                        error =
+                            "Сначала настрой и сохрани тарифы."
+                    }
+
+                    else -> {
+                        error = ""
+                        saving = true
+
+                        scope.launch {
+                            try {
+                                // Проверяем активную вахту
+                                // непосредственно перед сохранением.
+                                val shiftId =
+                                    dao.getActiveShift()?.id
+
+                                dao.insertWorkDay(
+                                    WorkDayEntity(
+                                        date = parsedDate,
+                                        picks = picks.takeIf {
+                                            it.isNotBlank()
+                                        }?.toDouble(),
+                                        weight = weight.takeIf {
+                                            it.isNotBlank()
+                                        }?.toDouble(),
+                                        volume = volume.takeIf {
+                                            it.isNotBlank()
+                                        }?.toDouble(),
+                                        boxes = boxes.takeIf {
+                                            it.isNotBlank()
+                                        }?.toDouble(),
+                                        hours = hours.takeIf {
+                                            it.isNotBlank()
+                                        }?.toDouble(),
+                                        picksRate =
+                                            currentTariffs.picksRate,
+                                        weightRate =
+                                            currentTariffs.weightRate,
+                                        volumeRate =
+                                            currentTariffs.volumeRate,
+                                        boxesRate =
+                                            currentTariffs.boxesRate,
+                                        hoursRate =
+                                            currentTariffs.hoursRate,
+                                        shiftId = shiftId
+                                    )
+                                )
+
+                                savedShiftId = shiftId
+                                saved = true
+                            } catch (e: Exception) {
+                                error =
+                                    "Не удалось сохранить рабочий день: ${e.message ?: "неизвестная ошибка"}"
+                            } finally {
+                                saving = false
+                            }
+                        }
                     }
                 }
             },
+            enabled = !saving && !saved,
             modifier = Modifier.fillMaxWidth(),
             colors = ButtonDefaults.buttonColors(
                 containerColor = Color(0xFFFF9800),
@@ -176,7 +378,16 @@ fun WorkDayScreen(onBack: () -> Unit = {}) {
             ),
             shape = RoundedCornerShape(12.dp)
         ) {
-            Text("СОХРАНИТЬ РАБОЧИЙ ДЕНЬ", fontWeight = FontWeight.Bold)
+            Text(
+                if (saving) {
+                    "СОХРАНЕНИЕ..."
+                } else if (saved) {
+                    "РАБОЧИЙ ДЕНЬ СОХРАНЁН"
+                } else {
+                    "СОХРАНИТЬ РАБОЧИЙ ДЕНЬ"
+                },
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }
@@ -190,9 +401,13 @@ private fun WorkDayNumberField(
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
-        label = { Text(label) },
+        label = {
+            Text(label)
+        },
         singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        keyboardOptions = KeyboardOptions(
+            keyboardType = KeyboardType.Decimal
+        ),
         modifier = Modifier.fillMaxWidth()
     )
 }
