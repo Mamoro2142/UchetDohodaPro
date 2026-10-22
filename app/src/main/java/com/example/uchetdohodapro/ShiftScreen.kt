@@ -19,7 +19,9 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Composable
-fun ShiftScreen() {
+fun ShiftScreen(
+    onDetailsVisibilityChanged: (Boolean) -> Unit = {}
+) {
     val context = LocalContext.current
 
     val dao = remember(context) {
@@ -94,6 +96,13 @@ fun ShiftScreen() {
 
     var selectedShift by remember {
         mutableStateOf<ShiftEntity?>(null)
+    }
+    DisposableEffect(selectedShift != null) {
+    onDetailsVisibilityChanged(selectedShift != null)
+
+    onDispose {
+        onDetailsVisibilityChanged(false)
+    }
     }
 
     var startDate by remember {
