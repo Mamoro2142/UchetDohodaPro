@@ -268,7 +268,11 @@ private fun IncomeApp() {
                     }
                 )
 
-                1 -> ShiftScreen()
+                1 1 -> ShiftScreen(
+    onDetailsVisibilityChanged = { isOpen ->
+        shiftDetailsOpen = isOpen
+    }
+)
 
                 2 -> StatisticsScreen()
 
