@@ -26,9 +26,11 @@ import java.util.Locale
 @Composable
 fun WorkDayScreen(onBack: () -> Unit = {}) {
     val context = LocalContext.current
+
     val dao = remember(context) {
         WorkDatabase.getInstance(context).workDao()
     }
+
     val scope = rememberCoroutineScope()
 
     var date by remember {
@@ -54,9 +56,28 @@ fun WorkDayScreen(onBack: () -> Unit = {}) {
         mutableStateOf<Long?>(null)
     }
 
-    var error by remember { mutableStateOf("") }
-    var saved by remember { mutableStateOf(false) }
-    var saving by remember { mutableStateOf(false) }
+    // Порядковые номера вахт.
+    // Внутренние ID базы данных не изменяются.
+    var shiftNumbers by remember {
+        mutableStateOf<Map<Long, Int>>(emptyMap())
+    }
+
+    fun shiftNumber(shiftId: Long?): Int? {
+        return shiftId?.let { shiftNumbers[it] }
+    }
+
+    var error by remember {
+        mutableStateOf("")
+    }
+
+    var saved by remember {
+        mutableStateOf(false)
+    }
+
+    var saving by remember {
+        mutableStateOf(false)
+    }
+
     var savedShiftId by remember {
         mutableStateOf<Long?>(null)
     }
@@ -69,6 +90,14 @@ fun WorkDayScreen(onBack: () -> Unit = {}) {
 
     LaunchedEffect(dao) {
         dao.observeShifts().collect { shifts ->
+
+            shiftNumbers = shifts
+                .sortedBy { it.id }
+                .mapIndexed { index, shift ->
+                    shift.id to (index + 1)
+                }
+                .toMap()
+
             activeShiftId = shifts.firstOrNull {
                 it.isActive
             }?.id
@@ -132,7 +161,9 @@ fun WorkDayScreen(onBack: () -> Unit = {}) {
 
                 Text(
                     if (activeShiftId != null) {
-                        "Активная вахта №$activeShiftId"
+                        "Активная вахта №${
+                            shiftNumber(activeShiftId) ?: "—"
+                        }"
                     } else {
                         "Нет активной вахты"
                     },
@@ -262,7 +293,9 @@ fun WorkDayScreen(onBack: () -> Unit = {}) {
         if (saved) {
             Text(
                 if (savedShiftId != null) {
-                    "Рабочий день сохранён в вахту №$savedShiftId!"
+                    "Рабочий день сохранён в вахту №${
+                        shiftNumber(savedShiftId) ?: "—"
+                    }!"
                 } else {
                     "Рабочий день сохранён без привязки к вахте!"
                 },
@@ -286,15 +319,22 @@ fun WorkDayScreen(onBack: () -> Unit = {}) {
                 }.getOrNull()
 
                 val values = listOf(
-                    picks, weight, volume, boxes, hours
+                    picks,
+                    weight,
+                    volume,
+                    boxes,
+                    hours
                 )
 
                 val invalid = values.any { value ->
                     val number = value.toDoubleOrNull()
+
                     value.isNotBlank() &&
-                        (number == null ||
-                         !number.isFinite() ||
-                         number < 0)
+                        (
+                            number == null ||
+                            !number.isFinite() ||
+                            number < 0
+                        )
                 }
 
                 val currentTariffs = tariffs
@@ -319,10 +359,13 @@ fun WorkDayScreen(onBack: () -> Unit = {}) {
                         error = ""
                         saving = true
 
+                        // Сохранение продолжится в Части 3.
+                        
+        
                         scope.launch {
                             try {
-                                // Проверяем активную вахту
-                                // непосредственно перед сохранением.
+                                // Получаем внутренний ID
+                                // активной вахты из базы данных.
                                 val shiftId =
                                     dao.getActiveShift()?.id
 
@@ -360,9 +403,12 @@ fun WorkDayScreen(onBack: () -> Unit = {}) {
 
                                 savedShiftId = shiftId
                                 saved = true
+
                             } catch (e: Exception) {
                                 error =
-                                    "Не удалось сохранить рабочий день: ${e.message ?: "неизвестная ошибка"}"
+                                    "Не удалось сохранить рабочий день: ${
+                                        e.message ?: "неизвестная ошибка"
+                                    }"
                             } finally {
                                 saving = false
                             }
@@ -411,3 +457,4 @@ private fun WorkDayNumberField(
         modifier = Modifier.fillMaxWidth()
     )
 }
+
