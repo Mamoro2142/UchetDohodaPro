@@ -71,6 +71,10 @@ fun ShiftScreen() {
         mutableStateOf<ShiftEntity?>(null)
     }
 
+    var deletingShift by remember {
+        mutableStateOf<ShiftEntity?>(null)
+    }
+
     var startDate by remember {
         mutableStateOf("")
     }
@@ -205,7 +209,6 @@ fun ShiftScreen() {
             }
         }
 
-        
         HorizontalDivider()
 
         Text(
@@ -216,7 +219,7 @@ fun ShiftScreen() {
         if (shifts.isEmpty()) {
             Text("Вахт пока нет")
         }
-
+        
         shifts.forEach { shift ->
             Card(
                 modifier = Modifier.fillMaxWidth()
@@ -227,7 +230,7 @@ fun ShiftScreen() {
                         Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        if (shift.isActive) {
+                        text = if (shift.isActive) {
                             "Вахта №${shift.id} — активна"
                         } else {
                             "Вахта №${shift.id} — завершена"
@@ -276,6 +279,20 @@ fun ShiftScreen() {
                     ) {
                         Text("Изменить даты")
                     }
+
+                    OutlinedButton(
+                        onClick = {
+                            deletingShift = shift
+                            operationError = null
+                        },
+                        enabled = !busy,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = Color(0xFFFF5C5C)
+                        )
+                    ) {
+                        Text("Удалить вахту")
+                    }
                 }
             }
         }
@@ -313,6 +330,98 @@ fun ShiftScreen() {
                 style = MaterialTheme.typography.bodySmall
             )
         }
+    }
+    
+    if (deletingShift != null) {
+        val shift = deletingShift!!
+
+        AlertDialog(
+            onDismissRequest = {
+                if (!busy) {
+                    deletingShift = null
+                }
+            },
+            title = {
+                Text(
+                    "Удалить вахту №${shift.id}?"
+                )
+            },
+            text = {
+                Column(
+                    verticalArrangement =
+                        Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        "Вы действительно хотите удалить эту вахту?"
+                    )
+
+                    Text(
+                        "Рабочих дней: ${
+                            shiftDaysCount(shift.id)
+                        }"
+                    )
+
+                    Text(
+                        "Заработано: ${
+                            money(shiftIncome(shift.id))
+                        }",
+                        color = Color(0xFF43D17D)
+                    )
+
+                    Text(
+                        "Все рабочие дни сохранятся и перейдут в категорию «Без привязки». Заработок и тарифы не изменятся."
+                    )
+
+                    if (shift.isActive) {
+                        Text(
+                            "Внимание: это активная вахта. После удаления новые рабочие дни будут сохраняться без привязки, пока вы не начнёте новую вахту.",
+                            color = Color(0xFFFF9800)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !busy,
+                    onClick = {
+                        if (!busy) {
+                            busy = true
+                            operationError = null
+
+                            scope.launch {
+                                try {
+                                    dao.deleteShiftSafely(
+                                        shift.id
+                                    )
+
+                                    deletingShift = null
+                                } catch (e: Exception) {
+                                    operationError =
+                                        "Не удалось удалить вахту."
+                                } finally {
+                                    busy = false
+                                }
+                            }
+                        }
+                    }
+                ) {
+                    Text(
+                        "Удалить",
+                        color = Color(0xFFFF5C5C)
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !busy,
+                    onClick = {
+                        deletingShift = null
+                    }
+                ) {
+                    Text("Отмена")
+                }
+            }
+        )
     }
 
     if (editingShift != null) {
@@ -364,7 +473,6 @@ fun ShiftScreen() {
                     }
                 }
             },
-
             confirmButton = {
                 TextButton(
                     enabled = !busy,
@@ -473,5 +581,3 @@ fun ShiftScreen() {
         )
     }
 }
-
-            
