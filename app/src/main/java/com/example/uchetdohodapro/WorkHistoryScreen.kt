@@ -50,6 +50,14 @@ fun WorkHistoryScreen() {
         dao.observeShifts()
     }.collectAsState(initial = emptyList())
 
+    // Единая нумерация существующих вахт: 1, 2, 3...
+    // ID в базе данных не изменяем.
+    val shiftNumbers = remember(shifts) {
+        shifts.sortedBy { it.id }
+            .mapIndexed { index, shift -> shift.id to (index + 1) }
+            .toMap()
+    }
+
     var editingDay by remember {
         mutableStateOf<WorkDayEntity?>(null)
     }
@@ -72,6 +80,7 @@ fun WorkHistoryScreen() {
         WorkDayEditScreen(
             day = day,
             shifts = shifts,
+            shiftNumbers = shiftNumbers,
             saving = saving,
             onBack = {
                 if (!saving) {
@@ -181,6 +190,7 @@ fun WorkHistoryScreen() {
                     ) { day ->
                         WorkHistoryCard(
                             day = day,
+                            shiftNumbers = shiftNumbers,
                             onClick = {
                                 operationError = ""
                                 editingDay = day
@@ -266,6 +276,7 @@ fun WorkHistoryScreen() {
 @Composable
 private fun WorkHistoryCard(
     day: WorkDayEntity,
+    shiftNumbers: Map<Long, Int>,
     onClick: () -> Unit
 ) {
     Card(
@@ -304,7 +315,8 @@ private fun WorkHistoryCard(
 
             Text(
                 if (day.shiftId != null) {
-                    "Вахта №${day.shiftId}"
+                    shiftNumbers[day.shiftId]?.let { "Вахта №$it" }
+                        ?: "Вахта недоступна"
                 } else {
                     "Без привязки к вахте"
                 },
@@ -361,6 +373,7 @@ private fun WorkHistoryCard(
 private fun WorkDayEditScreen(
     day: WorkDayEntity,
     shifts: List<ShiftEntity>,
+    shiftNumbers: Map<Long, Int>,
     saving: Boolean,
     onBack: () -> Unit,
     onSave: (WorkDayEntity) -> Unit,
@@ -504,7 +517,8 @@ private fun WorkDayEditScreen(
 
                 Text(
                     if (selectedShiftId != null) {
-                        "Вахта №$selectedShiftId"
+                        shiftNumbers[selectedShiftId]?.let { "Вахта №$it" }
+                            ?: "Вахта недоступна"
                     } else {
                         "Без привязки"
                     },
@@ -710,7 +724,7 @@ private fun WorkDayEditScreen(
                         Text("Без привязки")
                     }
 
-                    shifts.forEach { shift ->
+                    shifts.sortedBy { it.id }.forEach { shift ->
                         OutlinedButton(
                             onClick = {
                                 selectedShiftId = shift.id
@@ -719,7 +733,7 @@ private fun WorkDayEditScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(
-                                "Вахта №${shift.id}" +
+                                "Вахта №${shiftNumbers[shift.id] ?: "—"}" +
                                     if (shift.isActive) {
                                         " (активна)"
                                     } else {
