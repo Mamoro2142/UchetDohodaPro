@@ -75,6 +75,11 @@ fun ShiftScreen() {
         mutableStateOf<ShiftEntity?>(null)
     }
 
+    // Выбранная вахта для подробной статистики
+    var selectedShift by remember {
+        mutableStateOf<ShiftEntity?>(null)
+    }
+
     var startDate by remember {
         mutableStateOf("")
     }
@@ -95,243 +100,272 @@ fun ShiftScreen() {
         mutableStateOf(false)
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Text(
-            text = "Управление вахтами",
-            style = MaterialTheme.typography.headlineSmall
-        )
+    // Если выбрана вахта, открываем её статистику.
+    // При возврате снова показываем список вахт.
+    val detailsShift = selectedShift
 
-        if (operationError != null) {
-            Text(
-                text = operationError!!,
-                color = MaterialTheme.colorScheme.error
-            )
-        }
-
-        if (activeShift == null) {
-            Button(
-                onClick = {
-                    if (!busy) {
-                        busy = true
-                        operationError = null
-
-                        scope.launch {
-                            try {
-                                if (dao.getActiveShift() == null) {
-                                    dao.insertShift(
-                                        ShiftEntity(
-                                            startDate = today(),
-                                            isActive = true
-                                        )
-                                    )
-                                }
-                            } catch (e: Exception) {
-                                operationError =
-                                    "Не удалось начать вахту."
-                            } finally {
-                                busy = false
-                            }
-                        }
-                    }
-                },
-                enabled = !busy,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Начать вахту")
+    if (detailsShift != null) {
+        ShiftDetailsScreen(
+            shift = detailsShift,
+            onBack = {
+                selectedShift = null
             }
-        } else {
-            Card(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement =
-                        Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        "Активная вахта №${activeShift.id}",
-                        color = Color(0xFF43D17D)
-                    )
+        )
+    } else {
 
-                    Text(
-                        "Начало: ${activeShift.startDate}"
-                    )
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                text = "Управление вахтами",
+                style = MaterialTheme.typography.headlineSmall
+            )
 
-                    Text(
-                        "Рабочих дней: ${
-                            shiftDaysCount(activeShift.id)
-                        }"
-                    )
+            if (operationError != null) {
+                Text(
+                    text = operationError!!,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
 
-                    Text(
-                        "Заработано: ${
-                            money(shiftIncome(activeShift.id))
-                        }",
-                        color = Color(0xFF43D17D),
-                        style = MaterialTheme.typography.titleLarge
-                    )
+            if (activeShift == null) {
+                Button(
+                    onClick = {
+                        if (!busy) {
+                            busy = true
+                            operationError = null
 
-                    Button(
-                        onClick = {
-                            if (!busy) {
-                                busy = true
-                                operationError = null
-
-                                scope.launch {
-                                    try {
-                                        dao.updateShift(
-                                            activeShift.copy(
-                                                endDate = today(),
-                                                isActive = false
+                            scope.launch {
+                                try {
+                                    if (dao.getActiveShift() == null) {
+                                        dao.insertShift(
+                                            ShiftEntity(
+                                                startDate = today(),
+                                                isActive = true
                                             )
                                         )
-                                    } catch (e: Exception) {
-                                        operationError =
-                                            "Не удалось завершить вахту."
-                                    } finally {
-                                        busy = false
                                     }
+                                } catch (e: Exception) {
+                                    operationError =
+                                        "Не удалось начать вахту."
+                                } finally {
+                                    busy = false
                                 }
                             }
-                        },
-                        enabled = !busy,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Завершить вахту")
-                    }
-                }
-            }
-        }
-
-        HorizontalDivider()
-
-        Text(
-            text = "История вахт",
-            style = MaterialTheme.typography.titleLarge
-        )
-
-        if (shifts.isEmpty()) {
-            Text("Вахт пока нет")
-        }
-        
-        shifts.forEach { shift ->
-            Card(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement =
-                        Arrangement.spacedBy(8.dp)
+                        }
+                    },
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(
-                        text = if (shift.isActive) {
-                            "Вахта №${shift.id} — активна"
-                        } else {
-                            "Вахта №${shift.id} — завершена"
-                        },
-                        color = if (shift.isActive) {
-                            Color(0xFF43D17D)
-                        } else {
-                            MaterialTheme.colorScheme.onSurface
-                        },
-                        style = MaterialTheme.typography.titleMedium
-                    )
-
-                    Text(
-                        "Начало: ${shift.startDate}"
-                    )
-
-                    Text(
-                        "Окончание: ${shift.endDate ?: "—"}"
-                    )
-
-                    HorizontalDivider()
-
-                    Text(
-                        "Рабочих дней: ${
-                            shiftDaysCount(shift.id)
-                        }"
-                    )
-
-                    Text(
-                        "Заработано: ${
-                            money(shiftIncome(shift.id))
-                        }",
-                        color = Color(0xFF43D17D),
-                        style = MaterialTheme.typography.titleLarge
-                    )
-
-                    OutlinedButton(
-                        onClick = {
-                            editingShift = shift
-                            startDate = shift.startDate
-                            endDate = shift.endDate ?: ""
-                            errorMessage = null
-                        },
-                        enabled = !busy,
-                        modifier = Modifier.fillMaxWidth()
+                    Text("Начать вахту")
+                }
+            } else {
+                Card(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement =
+                            Arrangement.spacedBy(8.dp)
                     ) {
-                        Text("Изменить даты")
-                    }
-
-                    OutlinedButton(
-                        onClick = {
-                            deletingShift = shift
-                            operationError = null
-                        },
-                        enabled = !busy,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = Color(0xFFFF5C5C)
+                        Text(
+                            "Активная вахта №${activeShift.id}",
+                            color = Color(0xFF43D17D)
                         )
-                    ) {
-                        Text("Удалить вахту")
+
+                        Text(
+                            "Начало: ${activeShift.startDate}"
+                        )
+
+                        Text(
+                            "Рабочих дней: ${
+                                shiftDaysCount(activeShift.id)
+                            }"
+                        )
+
+                        Text(
+                            "Заработано: ${
+                                money(shiftIncome(activeShift.id))
+                            }",
+                            color = Color(0xFF43D17D),
+                            style = MaterialTheme.typography.titleLarge
+                        )
+
+                        Button(
+                            onClick = {
+                                if (!busy) {
+                                    busy = true
+                                    operationError = null
+
+                                    scope.launch {
+                                        try {
+                                            dao.updateShift(
+                                                activeShift.copy(
+                                                    endDate = today(),
+                                                    isActive = false
+                                                )
+                                            )
+                                        } catch (e: Exception) {
+                                            operationError =
+                                                "Не удалось завершить вахту."
+                                        } finally {
+                                            busy = false
+                                        }
+                                    }
+                                }
+                            },
+                            enabled = !busy,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Завершить вахту")
+                        }
                     }
                 }
             }
-        }
 
-        val unassignedDays = workDays.filter {
-            it.shiftId == null
-        }
-
-        if (unassignedDays.isNotEmpty()) {
             HorizontalDivider()
 
             Text(
-                "Рабочие дни без вахты",
-                style = MaterialTheme.typography.titleMedium
-            )
-
-            Text(
-                "Количество: ${unassignedDays.size}"
-            )
-
-            Text(
-                "Заработано: ${
-                    money(
-                        unassignedDays.sumOf {
-                            it.calculateIncome()
-                        }
-                    )
-                }",
-                color = Color(0xFFFF9800),
+                text = "История вахт",
                 style = MaterialTheme.typography.titleLarge
             )
 
-            Text(
-                "Эти дни можно привязать к вахте в истории рабочих дней.",
-                style = MaterialTheme.typography.bodySmall
-            )
+            if (shifts.isEmpty()) {
+                Text("Вахт пока нет")
+            }
+            
+            shifts.forEach { shift ->
+                Card(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement =
+                            Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = if (shift.isActive) {
+                                "Вахта №${shift.id} — активна"
+                            } else {
+                                "Вахта №${shift.id} — завершена"
+                            },
+                            color = if (shift.isActive) {
+                                Color(0xFF43D17D)
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                            style = MaterialTheme.typography.titleMedium
+                        )
+
+                        Text(
+                            "Начало: ${shift.startDate}"
+                        )
+
+                        Text(
+                            "Окончание: ${shift.endDate ?: "—"}"
+                        )
+
+                        HorizontalDivider()
+
+                        Text(
+                            "Рабочих дней: ${
+                                shiftDaysCount(shift.id)
+                            }"
+                        )
+
+                        Text(
+                            "Заработано: ${
+                                money(shiftIncome(shift.id))
+                            }",
+                            color = Color(0xFF43D17D),
+                            style = MaterialTheme.typography.titleLarge
+                        )
+
+                        // Новая кнопка статистики вахты
+                        Button(
+                            onClick = {
+                                selectedShift = shift
+                            },
+                            enabled = !busy,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFFFF8A24),
+                                contentColor = Color(0xFF111315)
+                            )
+                        ) {
+                            Text("Подробная статистика")
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                editingShift = shift
+                                startDate = shift.startDate
+                                endDate = shift.endDate ?: ""
+                                errorMessage = null
+                            },
+                            enabled = !busy,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Изменить даты")
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                deletingShift = shift
+                                operationError = null
+                            },
+                            enabled = !busy,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = Color(0xFFFF5C5C)
+                            )
+                        ) {
+                            Text("Удалить вахту")
+                        }
+                    }
+                }
+            }
+
+            val unassignedDays = workDays.filter {
+                it.shiftId == null
+            }
+
+            if (unassignedDays.isNotEmpty()) {
+                HorizontalDivider()
+
+                Text(
+                    "Рабочие дни без вахты",
+                    style = MaterialTheme.typography.titleMedium
+                )
+
+                Text(
+                    "Количество: ${unassignedDays.size}"
+                )
+
+                Text(
+                    "Заработано: ${
+                        money(
+                            unassignedDays.sumOf {
+                                it.calculateIncome()
+                            }
+                        )
+                    }",
+                    color = Color(0xFFFF9800),
+                    style = MaterialTheme.typography.titleLarge
+                )
+
+                Text(
+                    "Эти дни можно привязать к вахте в истории рабочих дней.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
         }
     }
-    
+
     if (deletingShift != null) {
         val shift = deletingShift!!
 
@@ -581,3 +615,5 @@ fun ShiftScreen() {
         )
     }
 }
+
+    
