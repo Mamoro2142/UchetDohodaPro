@@ -67,7 +67,9 @@ private fun IncomeApp() {
     var selectedTab by remember {
         mutableIntStateOf(0)
     }
-
+    var shiftDetailsOpen by remember {
+        mutableStateOf(false)
+    }
     var showAddDialog by remember {
         mutableStateOf(false)
     }
@@ -223,8 +225,9 @@ private fun IncomeApp() {
                 .fillMaxSize()
                 .padding(padding)
                 .background(Background)
-                .pointerInput(selectedTab) {
-                    detectHorizontalDragGestures(
+           .pointerInput(selectedTab, shiftDetailsOpen) {
+    if (!shiftDetailsOpen) {
+        detectHorizontalDragGestures(
                         onDragStart = {
                             horizontalDrag = 0f
                         },
@@ -250,11 +253,10 @@ private fun IncomeApp() {
 
                             horizontalDrag = 0f
                         },
-                        onDragCancel = {
-                            horizontalDrag = 0f
-                        }
+                     onDragCancel = { horizontalDrag = 0f }
                     )
-                }
+                 }
+           }
         ) {
             when (selectedTab) {
                 0 -> HomeScreen(
