@@ -1,3 +1,4 @@
+
 package com.example.uchetdohodapro
 
 import androidx.compose.foundation.layout.*
@@ -12,6 +13,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.uchetdohodapro.data.ShiftEntity
 import com.example.uchetdohodapro.data.WorkDatabase
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 private val DetailsOrange = Color(0xFFFF8A24)
@@ -20,6 +23,7 @@ private val DetailsGreen = Color(0xFF43D17D)
 @Composable
 fun ShiftDetailsScreen(
     shift: ShiftEntity,
+    shiftNumber: Int,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -31,6 +35,18 @@ fun ShiftDetailsScreen(
     val days by remember(dao, shift.id) {
         dao.observeWorkDaysForShift(shift.id)
     }.collectAsState(initial = emptyList())
+
+    val dateFormatter = remember {
+        DateTimeFormatter.ofPattern("dd.MM.yyyy")
+    }
+
+    val sortedDays = days.sortedWith(
+        compareByDescending { day ->
+            runCatching {
+                LocalDate.parse(day.date, dateFormatter)
+            }.getOrNull() ?: LocalDate.MIN
+        }
+    )
 
     fun money(value: Double): String {
         return String.format(
@@ -97,7 +113,7 @@ fun ShiftDetailsScreen(
         }
 
         Text(
-            "Вахта №${shift.id}",
+            "Вахта №$shiftNumber",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold
         )
@@ -196,29 +212,74 @@ fun ShiftDetailsScreen(
             style = MaterialTheme.typography.titleLarge
         )
 
-        if (days.isEmpty()) {
+        if (sortedDays.isEmpty()) {
             Text(
                 "В этой вахте пока нет рабочих дней.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         } else {
-            days.forEach { day ->
+            sortedDays.forEach { day ->
+
                 Card(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
-                        modifier = Modifier.padding(14.dp),
+                        modifier = Modifier.padding(16.dp),
                         verticalArrangement =
-                            Arrangement.spacedBy(6.dp)
+                            Arrangement.spacedBy(8.dp)
                     ) {
+                        Text(
+                            text = day.date,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        HorizontalDivider()
+
+                        // Показываем только заполненные поля.
+                        // Если поле равно null, оно не выводится.
+
+                        if (day.picks != null) {
+                            Text(
+                                "Пики: ${number(day.picks)}"
+                            )
+                        }
+
+                        if (day.weight != null) {
+                            Text(
+                                "Вес: ${number(day.weight)}"
+                            )
+                        }
+
+                        if (day.volume != null) {
+                            Text(
+                                "Объём: ${number(day.volume)}"
+                            )
+                        }
+
+                        if (day.boxes != null) {
+                            Text(
+                                "Коробки: ${number(day.boxes)}"
+                            )
+                        }
+
+                        if (day.hours != null) {
+                            Text(
+                                "Доп. часы: ${number(day.hours)}",
+                                color = DetailsOrange
+                            )
+                        }
+
+                        HorizontalDivider()
+
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement =
                                 Arrangement.SpaceBetween
                         ) {
                             Text(
-                                day.date,
-                                fontWeight = FontWeight.Bold
+                                "Заработано",
+                                fontWeight = FontWeight.Medium
                             )
 
                             Text(
@@ -227,27 +288,14 @@ fun ShiftDetailsScreen(
                                 fontWeight = FontWeight.Bold
                             )
                         }
-
-                        Text(
-                            "Пики: ${number(day.picks ?: 0.0)} · " +
-                                "Вес: ${number(day.weight ?: 0.0)}"
-                        )
-
-                        Text(
-                            "Объём: ${number(day.volume ?: 0.0)} · " +
-                                "Коробки: ${number(day.boxes ?: 0.0)}"
-                        )
-
-                        Text(
-                            "Доп. часы: ${number(day.hours ?: 0.0)}",
-                            color = DetailsOrange
-                        )
                     }
                 }
             }
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(
+            modifier = Modifier.height(24.dp)
+        )
     }
 }
 
@@ -257,29 +305,34 @@ private fun ShiftMetricRow(
     quantity: String,
     income: String
 ) {
-    Row(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Column(
-            modifier = Modifier.weight(1f)
+        Text(
+            title,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement =
+                Arrangement.SpaceBetween
         ) {
             Text(
-                title,
-                fontWeight = FontWeight.SemiBold
+                quantity,
+                style = MaterialTheme.typography.titleMedium
             )
 
             Text(
-                "Количество: $quantity",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                income,
+                color = DetailsGreen,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Medium
             )
         }
-
-        Text(
-            income,
-            color = DetailsGreen,
-            fontWeight = FontWeight.SemiBold
-        )
     }
 }
+
+        
