@@ -3,8 +3,10 @@ package com.example.uchetdohodapro
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -14,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -81,16 +84,50 @@ private fun IncomeApp() {
         mutableStateOf(false)
     }
 
+    // Перехватываем системное действие "Назад".
+    // На главной вкладке оно ничего не делает.
+    BackHandler(enabled = true) {
+        when {
+            showAddDialog -> {
+                showAddDialog = false
+            }
+
+            showTariffs -> {
+                showTariffs = false
+            }
+
+            showWorkDay -> {
+                showWorkDay = false
+            }
+
+            showHistory -> {
+                showHistory = false
+            }
+
+            selectedTab != 0 -> {
+                selectedTab = 0
+            }
+
+            else -> {
+                // Главная: остаёмся в приложении.
+            }
+        }
+    }
+
     if (showTariffs) {
         TariffsScreen(
-            onBack = { showTariffs = false }
+            onBack = {
+                showTariffs = false
+            }
         )
         return
     }
 
     if (showWorkDay) {
         WorkDayScreen(
-            onBack = { showWorkDay = false }
+            onBack = {
+                showWorkDay = false
+            }
         )
         return
     }
@@ -176,11 +213,48 @@ private fun IncomeApp() {
             }
         }
     ) { padding ->
+
+        var horizontalDrag by remember {
+            mutableFloatStateOf(0f)
+        }
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .background(Background)
+                .pointerInput(selectedTab) {
+                    detectHorizontalDragGestures(
+                        onDragStart = {
+                            horizontalDrag = 0f
+                        },
+                        onHorizontalDrag = {
+                                change, dragAmount ->
+                            horizontalDrag += dragAmount
+                            change.consume()
+                        },
+                        onDragEnd = {
+                            val threshold = 90.dp.toPx()
+
+                            when {
+                                horizontalDrag < -threshold &&
+                                    selectedTab < 3 -> {
+                                    selectedTab += 1
+                                }
+
+                                horizontalDrag > threshold &&
+                                    selectedTab > 0 -> {
+                                    selectedTab -= 1
+                                }
+                            }
+
+                            horizontalDrag = 0f
+                        },
+                        onDragCancel = {
+                            horizontalDrag = 0f
+                        }
+                    )
+                }
         ) {
             when (selectedTab) {
                 0 -> HomeScreen(
@@ -632,7 +706,6 @@ private fun MiniValue(
         )
     }
 }
-
 @Composable
 private fun ProfileScreen(
     onTariffsClick: () -> Unit
