@@ -1,6 +1,7 @@
 
 package com.example.uchetdohodapro
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -67,6 +68,22 @@ fun ShiftScreen() {
         )
     }
 
+    // Порядковые номера вместо внутренних ID.
+    // Сортируем по ID создания, а не по положению
+    // в списке, возвращённом базой данных.
+    val shiftNumbers = remember(shifts) {
+        shifts
+            .sortedBy { it.id }
+            .mapIndexed { index, shift ->
+                shift.id to (index + 1)
+            }
+            .toMap()
+    }
+
+    fun shiftNumber(shiftId: Long): Int {
+        return shiftNumbers[shiftId] ?: 1
+    }
+
     var editingShift by remember {
         mutableStateOf<ShiftEntity?>(null)
     }
@@ -75,7 +92,6 @@ fun ShiftScreen() {
         mutableStateOf<ShiftEntity?>(null)
     }
 
-    // Выбранная вахта для подробной статистики
     var selectedShift by remember {
         mutableStateOf<ShiftEntity?>(null)
     }
@@ -100,13 +116,20 @@ fun ShiftScreen() {
         mutableStateOf(false)
     }
 
-    // Если выбрана вахта, открываем её статистику.
-    // При возврате снова показываем список вахт.
+    // Системный жест "Назад" закрывает
+    // подробную статистику выбранной вахты.
+    BackHandler(
+        enabled = selectedShift != null
+    ) {
+        selectedShift = null
+    }
+
     val detailsShift = selectedShift
 
     if (detailsShift != null) {
         ShiftDetailsScreen(
             shift = detailsShift,
+            shiftNumber = shiftNumber(detailsShift.id),
             onBack = {
                 selectedShift = null
             }
@@ -173,7 +196,9 @@ fun ShiftScreen() {
                             Arrangement.spacedBy(8.dp)
                     ) {
                         Text(
-                            "Активная вахта №${activeShift.id}",
+                            "Активная вахта №${
+                                shiftNumber(activeShift.id)
+                            }",
                             color = Color(0xFF43D17D)
                         )
 
@@ -237,7 +262,6 @@ fun ShiftScreen() {
             if (shifts.isEmpty()) {
                 Text("Вахт пока нет")
             }
-            
             shifts.forEach { shift ->
                 Card(
                     modifier = Modifier.fillMaxWidth()
@@ -249,9 +273,9 @@ fun ShiftScreen() {
                     ) {
                         Text(
                             text = if (shift.isActive) {
-                                "Вахта №${shift.id} — активна"
+                                "Вахта №${shiftNumber(shift.id)} — активна"
                             } else {
-                                "Вахта №${shift.id} — завершена"
+                                "Вахта №${shiftNumber(shift.id)} — завершена"
                             },
                             color = if (shift.isActive) {
                                 Color(0xFF43D17D)
@@ -285,7 +309,6 @@ fun ShiftScreen() {
                             style = MaterialTheme.typography.titleLarge
                         )
 
-                        // Новая кнопка статистики вахты
                         Button(
                             onClick = {
                                 selectedShift = shift
@@ -365,7 +388,7 @@ fun ShiftScreen() {
             }
         }
     }
-
+    
     if (deletingShift != null) {
         val shift = deletingShift!!
 
@@ -377,7 +400,7 @@ fun ShiftScreen() {
             },
             title = {
                 Text(
-                    "Удалить вахту №${shift.id}?"
+                    "Удалить вахту №${shiftNumber(shift.id)}?"
                 )
             },
             text = {
@@ -615,5 +638,3 @@ fun ShiftScreen() {
         )
     }
 }
-
-    
