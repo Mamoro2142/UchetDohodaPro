@@ -65,6 +65,30 @@ data class ShiftEntity(
 @Dao
 interface WorkDao {
 
+    @Query("SELECT * FROM tariffs ORDER BY id")
+    suspend fun backupTariffs(): List<TariffEntity>
+
+    @Query("SELECT * FROM work_days ORDER BY id")
+    suspend fun backupDays(): List<WorkDayEntity>
+
+    @Query("SELECT * FROM shifts ORDER BY id")
+    suspend fun backupShifts(): List<ShiftEntity>
+
+    @Insert
+    suspend fun restoreDays(days: List<WorkDayEntity>)
+
+    @Insert
+    suspend fun restoreShifts(shifts: List<ShiftEntity>)
+
+    @Query("DELETE FROM work_days")
+    suspend fun clearDaysForRestore()
+
+    @Query("DELETE FROM shifts")
+    suspend fun clearShiftsForRestore()
+
+    @Query("DELETE FROM tariffs")
+    suspend fun clearTariffsForRestore()
+
     @Query("SELECT * FROM tariffs WHERE id = 1 LIMIT 1")
     fun observeTariffs(): Flow<TariffEntity?>
 

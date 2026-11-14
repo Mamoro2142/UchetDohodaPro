@@ -719,6 +719,7 @@ private fun ProfileScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(22.dp)
     ) {
         Text(
@@ -805,11 +806,7 @@ private fun ProfileScreen(
 
                 Spacer(Modifier.height(5.dp))
 
-                Text(
-                    "Добавим сохранение и восстановление данных позднее.",
-                    color = SecondaryText,
-                    fontSize = 13.sp
-                )
+                BackupControls()
             }
         }
     }
