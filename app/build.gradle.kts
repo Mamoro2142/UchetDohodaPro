@@ -47,6 +47,8 @@ android {
         }
     }
 
+    // Test the actual distributed variant, including its desugared library.
+    testBuildType = "release"
     testOptions { unitTests.isIncludeAndroidResources = true }
 
     buildFeatures {

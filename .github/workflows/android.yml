@@ -71,7 +71,7 @@ jobs:
             exit 1
           fi
 
-          gradle testDebugUnitTest lintDebug lintRelease assembleRelease assembleDebugAndroidTest
+          gradle testDebugUnitTest lintDebug lintRelease assembleRelease assembleReleaseAndroidTest
       - name: Verify restored keystore certificate
         env:
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}

@@ -23,7 +23,7 @@ adb shell run-as "$package_name" mkdir -p databases
 adb shell run-as "$package_name" cp /data/local/tmp/legacy-v3.db databases/uchet_dohoda.db
 # No uninstall/clear: this must be an install over the original signed 1.0.9.
 adb install -r "$apk_path"
-adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+adb install -r app/build/outputs/apk/androidTest/release/app-release-androidTest.apk
 adb shell am instrument -w -r -e class com.example.uchetdohodapro.UpgradeRegressionTest "$package_name.test/androidx.test.runner.AndroidJUnitRunner" | tr -d '\r' | tee regression-evidence/upgrade-instrumentation.txt
 grep -q 'OK (1 test)' regression-evidence/upgrade-instrumentation.txt
 collect_evidence
