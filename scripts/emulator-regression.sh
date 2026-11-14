@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -euxo pipefail
 package_name=com.example.uchetdohodapro
 apk_path=app/build/outputs/apk/debug/app-debug.apk
 mkdir -p regression-evidence
@@ -10,6 +10,10 @@ collect_evidence() {
 trap collect_evidence EXIT
 adb shell wm size 480x800
 adb shell wm density 240
+# Android 8 does not grant CHANGE_WIFI_STATE to the shell user.
+# Root is available only on this disposable google_apis emulator.
+adb root
+adb wait-for-device
 adb shell svc wifi disable
 adb shell svc data disable
 adb install -r baseline/app-debug.apk
