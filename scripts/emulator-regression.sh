@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euxo pipefail
 package_name=com.example.uchetdohodapro
-apk_path=app/build/outputs/apk/debug/app-debug.apk
+apk_path=app/build/outputs/apk/release/app-release.apk
 mkdir -p regression-evidence
 collect_evidence() {
   adb logcat -d > regression-evidence/logcat.txt || true
