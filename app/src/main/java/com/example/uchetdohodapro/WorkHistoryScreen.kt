@@ -1,6 +1,7 @@
 
 package com.example.uchetdohodapro
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -19,6 +20,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.uchetdohodapro.data.ShiftEntity
+import com.example.uchetdohodapro.data.uniqueWorkDayCount
 import com.example.uchetdohodapro.data.parseNonNegativeNumber
 import com.example.uchetdohodapro.data.editableNumber
 import com.example.uchetdohodapro.data.WorkDatabase
@@ -74,6 +76,13 @@ fun WorkHistoryScreen() {
 
     var operationError by remember {
         mutableStateOf("")
+    }
+
+    BackHandler(enabled = editingDay != null) {
+        if (!saving) {
+            editingDay = null
+            operationError = ""
+        }
     }
 
     if (editingDay != null) {
@@ -160,7 +169,7 @@ fun WorkHistoryScreen() {
                     Spacer(Modifier.height(8.dp))
 
                     Text(
-                        "Рабочих дней: ${days.size}",
+                        "Рабочих дней: ${uniqueWorkDayCount(days)}",
                         color = HistoryText
                     )
                 }

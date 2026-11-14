@@ -97,6 +97,26 @@ class UpgradeRegressionTest : RegressionBase() {
         device.pressBack()
         compose.onNodeWithText("Добавить рабочий день", substring = true).assertExists()
         // A single Back returns home: no duplicate form stack.
+        click("История рабочих дней")
+        compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("2026-10-24"))
+        compose.onNodeWithText("2026-10-24").performClick()
+        device.pressBack()
+        compose.onNodeWithText("ИСТОРИЯ РАБОЧИХ ДНЕЙ").assertExists()
+        compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("2026-10-24"))
+        compose.onNodeWithText("2026-10-24").performClick()
+        click("СОХРАНИТЬ ИЗМЕНЕНИЯ")
+        waitForText("ИСТОРИЯ РАБОЧИХ ДНЕЙ")
+        runBlocking {
+            assertEquals(1.234, dao.getWorkDay(7)!!.picks!!, 0.0)
+            dao.insertWorkDay(WorkDayEntity(date = "2026-11-15", picks = 1.0, picksRate = 1.0))
+        }
+        compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("2026-11-15"))
+        compose.onNodeWithText("2026-11-15").performClick()
+        click("Удалить рабочий день")
+        compose.onNode(hasText("Удалить") and hasAnyAncestor(isDialog())).performClick()
+        compose.waitUntil(10000) { runBlocking { dao.backupDays().size == 2 } }
+        device.pressBack()
+        compose.onNodeWithText("Добавить рабочий день", substring = true).assertExists()
         compose.onNodeWithText("Вахта").performClick()
         click("Подробная статистика")
         compose.onNodeWithText("2026-10-24").performScrollTo().assertIsDisplayed()
@@ -108,6 +128,7 @@ class UpgradeRegressionTest : RegressionBase() {
         profile()
         click("Добавить аванс или штраф")
         compose.onAllNodes(hasSetTextAction())[0].performTextInput("1,25")
+        compose.onAllNodes(hasSetTextAction())[1].performTextReplacement("2026-11-14")
         Espresso.closeSoftKeyboard()
         compose.onNodeWithText("Сохранить").performClick()
         compose.waitUntil(10000) { runBlocking { dao.backupMoneyOperations().size == 1 } }
@@ -117,15 +138,24 @@ class UpgradeRegressionTest : RegressionBase() {
         compose.onNodeWithText("Сохранить").performClick()
         compose.waitUntil(10000) { runBlocking { dao.backupMoneyOperations().singleOrNull()?.amountMinor == 250L } }
         shot("04-operation-updated")
+        compose.onNodeWithText("Статистика").performClick()
+        compose.onNodeWithText("2026-10").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText(String.format(Locale.getDefault(), "%.2f ₽", 3.085)).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Остаток: " + String.format(Locale.getDefault(), "%.2f ₽", 1.25)).performScrollTo().assertIsDisplayed()
+        shot("04-monthly-statistics")
+        profile()
         click("Создать резервную копию")
         val save = device.wait(Until.findObject(By.text(Pattern.compile("(?i)save"))), 15000)
             ?: error("Системная кнопка сохранения резервной копии не найдена")
         save.click()
         waitForText("Резервная копия создана")
+        click("Удалить")
+        compose.onNode(hasText("Удалить") and hasAnyAncestor(isDialog())).performClick()
+        compose.waitUntil(10000) { runBlocking { dao.backupMoneyOperations().isEmpty() } }
         // Add disposable test data. Cancellation must retain it; confirmed import must replace it.
         runBlocking { dao.insertWorkDay(WorkDayEntity(date = "2026-11-15", picks = 10.0, picksRate = 1.0)) }
         importBackup(confirm = false)
-        runBlocking { assertEquals(3, dao.backupDays().size) }
+        runBlocking { assertEquals(3, dao.backupDays().size); assertTrue(dao.backupMoneyOperations().isEmpty()) }
         importBackup(confirm = true)
         verifyRestoredData()
         shot("05-restored-profile")
