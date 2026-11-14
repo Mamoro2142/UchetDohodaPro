@@ -71,7 +71,7 @@ jobs:
             exit 1
           fi
 
-          gradle testDebugUnitTest lintDebug lintRelease assembleRelease assembleReleaseAndroidTest
+          gradle testDebugUnitTest lintDebug lintRelease assembleDebug assembleDebugAndroidTest
       - name: Verify restored keystore certificate
         env:
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -86,7 +86,7 @@ jobs:
         run: |
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify \
             --print-certs \
-            app/build/outputs/apk/release/app-release.apk
+            app/build/outputs/apk/debug/app-debug.apk
 
       - name: Download original signed 1.0.9 for upgrade test
         env:
@@ -97,7 +97,7 @@ jobs:
           unzip -q "$RUNNER_TEMP/baseline.zip" -d baseline
           test -s baseline/app-debug.apk
           old_cert=$("$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs baseline/app-debug.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
-          new_cert=$("$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs app/build/outputs/apk/release/app-release.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
+          new_cert=$("$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs app/build/outputs/apk/debug/app-debug.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
           test -n "$old_cert"
           test "$old_cert" = "$new_cert"
 

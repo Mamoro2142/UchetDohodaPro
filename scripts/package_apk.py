@@ -8,7 +8,7 @@ import shutil
 import subprocess
 import xml.etree.ElementTree as ET
 
-source = Path("app/build/outputs/apk/release/app-release.apk")
+source = Path("app/build/outputs/apk/debug/app-debug.apk")
 build_tools = Path(os.environ["ANDROID_HOME"]) / "build-tools/35.0.0"
 badging = subprocess.check_output([str(build_tools / "aapt"), "dump", "badging", str(source)], text=True).splitlines()[0]
 package = re.search(r"name='([^']+)'", badging).group(1)
@@ -42,7 +42,7 @@ shutil.copyfile(source, destination / name)
 checksum = hashlib.sha256((destination / name).read_bytes()).hexdigest()
 (destination / "SHA256SUMS.txt").write_text(f"{checksum}  {name}\n")
 metadata = {
-    "applicationId": package, "versionName": version, "versionCode": code,
+    "applicationId": package, "versionName": version, "versionCode": code, "buildType": "debug",
     "commit": os.environ["GITHUB_SHA"],
     "workflow": f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
     "apk": name, "sha256": checksum, "certificateSha256": digest,

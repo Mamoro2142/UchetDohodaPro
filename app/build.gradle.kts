@@ -37,18 +37,12 @@ android {
     }
 
     buildTypes {
-        getByName("release") {
-            signingConfig = signingConfigs.getByName("permanent")
-            isMinifyEnabled = false
-        }
         getByName("debug") {
             signingConfig =
                 signingConfigs.getByName("permanent")
         }
     }
 
-    // Test the actual distributed variant, including its desugared library.
-    testBuildType = "release"
     testOptions { unitTests.isIncludeAndroidResources = true }
 
     buildFeatures {
