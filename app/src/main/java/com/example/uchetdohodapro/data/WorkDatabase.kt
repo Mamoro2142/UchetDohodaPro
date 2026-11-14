@@ -21,6 +21,8 @@ import androidx.room.Index
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.time.format.ResolverStyle
 
 @Entity(tableName = "tariffs")
 data class TariffEntity(
@@ -68,6 +70,32 @@ data class ShiftEntity(
     val isActive: Boolean = true
 )
 
+fun parseStoredDate(text: String): LocalDate? = runCatching {
+    when {
+        text.matches(Regex("[0-9]{4}-[0-9]{2}-[0-9]{2}")) -> LocalDate.parse(text)
+        text.matches(Regex("[0-9]{2}[.][0-9]{2}[.][0-9]{4}")) -> LocalDate.parse(text,
+            DateTimeFormatter.ofPattern("dd.MM.uuuu").withResolverStyle(ResolverStyle.STRICT))
+        else -> null
+    }
+}.getOrNull()?.takeIf { it.year in 1..9999 }
+
+fun dayBelongsToShift(date: String, shift: ShiftEntity): Boolean {
+    val day = parseStoredDate(date) ?: return false
+    val start = parseStoredDate(shift.startDate) ?: return false
+    val end = shift.endDate?.let { parseStoredDate(it) ?: return false }
+    return !day.isBefore(start) && (end == null || !day.isAfter(end))
+}
+
+fun uniqueWorkDayCount(days: List<WorkDayEntity>): Int = days.map { parseStoredDate(it.date)?.toString() ?: it.date }.distinct().size
+
+private fun validateShiftDates(shift: ShiftEntity) {
+    val start = parseStoredDate(shift.startDate)
+    val end = shift.endDate?.let { parseStoredDate(it) }
+    require(start != null && (shift.endDate == null || end != null)) { "Укажите правильные даты вахты" }
+    require(end == null || !end.isBefore(start)) { "Окончание раньше начала вахты" }
+    require(!shift.isActive || shift.endDate == null) { "У активной вахты не должно быть даты окончания" }
+}
+
 const val ADVANCE = "advance"
 const val FINE = "fine"
 
@@ -94,7 +122,7 @@ fun parseOperationMinor(text: String): Long? = runCatching {
 }.getOrNull()
 
 fun validOperationDate(text: String): Boolean = text.matches(Regex("[0-9]{4}-[0-9]{2}-[0-9]{2}")) &&
-    runCatching { LocalDate.parse(text).toString() == text }.getOrDefault(false)
+    parseStoredDate(text)?.toString() == text
 
 fun financeTotal(operations: List<MoneyOperationEntity>, type: String): Double =
     operations.filter { it.type == type }.sumOf { BigDecimal.valueOf(it.amountMinor, 2) }.toDouble()
@@ -171,10 +199,42 @@ interface WorkDao {
     fun observeWorkDays(): Flow<List<WorkDayEntity>>
 
     @Insert
-    suspend fun insertWorkDay(day: WorkDayEntity): Long
+    suspend fun insertWorkDayRaw(day: WorkDayEntity): Long
 
     @Update
-    suspend fun updateWorkDay(day: WorkDayEntity)
+    suspend fun updateWorkDayRaw(day: WorkDayEntity): Int
+
+    @Query("SELECT COUNT(*) FROM work_days WHERE id != :excludedId AND (date = :isoDate OR date = :displayDate)")
+    suspend fun countDaysForDate(isoDate: String, displayDate: String, excludedId: Long): Int
+
+    @Transaction
+    suspend fun insertWorkDay(day: WorkDayEntity): Long {
+        val date = parseStoredDate(day.date) ?: error("Неверная дата рабочего дня")
+        require(countDaysForDate(date.toString(), date.format(DateTimeFormatter.ofPattern("dd.MM.uuuu")), 0) == 0) {
+            "Рабочий день за эту дату уже существует. Измените его в истории."
+        }
+        day.shiftId?.let { id ->
+            val shift = getShift(id) ?: error("Выбранная вахта больше не существует")
+            require(dayBelongsToShift(day.date, shift)) { "Дата рабочего дня вне периода выбранной вахты" }
+        }
+        return insertWorkDayRaw(day)
+    }
+
+    @Transaction
+    suspend fun updateWorkDay(day: WorkDayEntity) {
+        val old = getWorkDay(day.id) ?: error("Рабочий день уже удалён")
+        val date = parseStoredDate(day.date) ?: error("Неверная дата рабочего дня")
+        if (day.date != old.date) require(countDaysForDate(date.toString(), date.format(DateTimeFormatter.ofPattern("dd.MM.uuuu")), day.id) == 0) {
+            "Рабочий день за эту дату уже существует"
+        }
+        day.shiftId?.let { id ->
+            val shift = getShift(id) ?: error("Выбранная вахта больше не существует")
+            // Old mismatches remain editable without silently rewriting historical dates or links.
+            if (old.date != day.date || old.shiftId != day.shiftId)
+                require(dayBelongsToShift(day.date, shift)) { "Дата рабочего дня вне периода выбранной вахты" }
+        }
+        check(updateWorkDayRaw(day) == 1) { "Рабочий день уже удалён" }
+    }
 
     @Query("DELETE FROM work_days WHERE id = :dayId")
     suspend fun deleteWorkDay(dayId: Long)
@@ -198,14 +258,11 @@ interface WorkDao {
     )
     fun observeUnassignedWorkDays(): Flow<List<WorkDayEntity>>
 
-    @Query(
-        "UPDATE work_days SET shiftId = :shiftId " +
-        "WHERE id = :dayId"
-    )
-    suspend fun assignWorkDayToShift(
-        dayId: Long,
-        shiftId: Long?
-    )
+    @Transaction
+    suspend fun assignWorkDayToShift(dayId: Long, shiftId: Long?) {
+        val day = getWorkDay(dayId) ?: error("Рабочий день уже удалён")
+        updateWorkDay(day.copy(shiftId = shiftId))
+    }
 
     @Query("SELECT * FROM shifts ORDER BY id DESC")
     fun observeShifts(): Flow<List<ShiftEntity>>
@@ -213,11 +270,34 @@ interface WorkDao {
     @Query("SELECT * FROM shifts WHERE isActive = 1 LIMIT 1")
     suspend fun getActiveShift(): ShiftEntity?
 
+    @Query("SELECT COUNT(*) FROM shifts WHERE isActive = 1 AND id != :excludedId")
+    suspend fun countOtherActiveShifts(excludedId: Long): Int
+
     @Insert
-    suspend fun insertShift(shift: ShiftEntity): Long
+    suspend fun insertShiftRaw(shift: ShiftEntity): Long
 
     @Update
-    suspend fun updateShift(shift: ShiftEntity)
+    suspend fun updateShiftRaw(shift: ShiftEntity): Int
+
+    @Transaction
+    suspend fun insertShift(shift: ShiftEntity): Long {
+        validateShiftDates(shift)
+        require(!shift.isActive || countOtherActiveShifts(0) == 0) { "Уже существует активная вахта" }
+        return insertShiftRaw(shift)
+    }
+
+    @Transaction
+    suspend fun updateShift(shift: ShiftEntity) {
+        val old = getShift(shift.id) ?: error("Вахта уже удалена")
+        validateShiftDates(shift)
+        require(!shift.isActive || countOtherActiveShifts(shift.id) == 0) { "Уже существует другая активная вахта" }
+        if (old.startDate != shift.startDate || old.endDate != shift.endDate) {
+            require(backupDays().filter { it.shiftId == shift.id }.all { dayBelongsToShift(it.date, shift) }) {
+                "Новые даты исключают связанные рабочие дни. Сначала измените их привязку в истории."
+            }
+        }
+        check(updateShiftRaw(shift) == 1) { "Вахта уже удалена" }
+    }
     
     @Query(
         "UPDATE work_days SET shiftId = NULL " +

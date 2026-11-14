@@ -66,7 +66,7 @@ fun StatisticsScreen() {
     }
 
     val averageIncome = if (days.isNotEmpty()) {
-        totalIncome / days.size
+        totalIncome / uniqueWorkDayCount(days)
     } else {
         0.0
     }
@@ -75,22 +75,8 @@ fun StatisticsScreen() {
         it.calculateIncome()
     }
 
-    val dayMonthlyIncome = days
-        .filter {
-            it.date.length >= 7 &&
-                it.date[4] == '-'
-        }
-        .groupBy {
-            it.date.take(7)
-        }
-        .mapValues { entry ->
-            entry.value.sumOf {
-                it.calculateIncome()
-            }
-        }
-        .toSortedMap(
-            compareByDescending { it }
-        )
+    val dayMonthlyIncome = days.groupBy { parseStoredDate(it.date)?.toString()?.take(7) }
+        .filterKeys { it != null }.mapKeys { it.key!! }.mapValues { (_, values) -> values.sumOf { it.calculateIncome() } }
 
     val monthlyIncome = (dayMonthlyIncome.keys + operations.map { it.date.take(7) }).associateWith {
         dayMonthlyIncome[it] ?: 0.0
@@ -167,7 +153,7 @@ fun StatisticsScreen() {
             StatsSmallCard(
                 modifier = Modifier.weight(1f),
                 title = "Рабочие дни",
-                value = days.size.toString()
+                value = uniqueWorkDayCount(days).toString()
             )
 
             StatsSmallCard(

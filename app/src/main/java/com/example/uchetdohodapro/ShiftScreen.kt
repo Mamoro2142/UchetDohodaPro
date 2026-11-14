@@ -19,6 +19,8 @@ import com.example.uchetdohodapro.data.FINE
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.time.format.ResolverStyle
+import com.example.uchetdohodapro.data.uniqueWorkDayCount
 import java.util.Locale
 
 @Composable
@@ -48,7 +50,7 @@ fun ShiftScreen(
     }
 
     val formatter = remember {
-        DateTimeFormatter.ofPattern("dd.MM.yyyy")
+        DateTimeFormatter.ofPattern("dd.MM.uuuu").withResolverStyle(ResolverStyle.STRICT)
     }
 
     fun today(): String {
@@ -56,9 +58,7 @@ fun ShiftScreen(
     }
 
     fun shiftDaysCount(shiftId: Long): Int {
-        return workDays.count {
-            it.shiftId == shiftId
-        }
+        return uniqueWorkDayCount(workDays.filter { it.shiftId == shiftId })
     }
 
     fun shiftIncome(shiftId: Long): Double {
@@ -87,9 +87,7 @@ fun ShiftScreen(
             .toMap()
     }
 
-    fun shiftNumber(shiftId: Long): Int {
-        return shiftNumbers[shiftId] ?: 1
-    }
+    fun shiftNumber(shiftId: Long): String = shiftNumbers[shiftId]?.toString() ?: "—"
 
     var editingShift by remember {
         mutableStateOf<ShiftEntity?>(null)
@@ -138,12 +136,15 @@ fun ShiftScreen(
         selectedShift = null
     }
 
-    val detailsShift = selectedShift
+    val detailsShift = shifts.firstOrNull { it.id == selectedShift?.id }
+    LaunchedEffect(selectedShift?.id, shifts) {
+        if (selectedShift != null && detailsShift == null) selectedShift = null
+    }
 
     if (detailsShift != null) {
         ShiftDetailsScreen(
             shift = detailsShift,
-            shiftNumber = shiftNumber(detailsShift.id),
+            shiftNumber = shiftNumbers.getValue(detailsShift.id),
             onBack = {
                 selectedShift = null
             }
@@ -188,7 +189,7 @@ fun ShiftScreen(
                                     }
                                 } catch (e: Exception) {
                                     operationError =
-                                        "Не удалось начать вахту."
+                                        e.message ?: "Не удалось начать вахту."
                                 } finally {
                                     busy = false
                                 }
@@ -250,7 +251,7 @@ fun ShiftScreen(
                                             )
                                         } catch (e: Exception) {
                                             operationError =
-                                                "Не удалось завершить вахту."
+                                                e.message ?: "Не удалось завершить вахту."
                                         } finally {
                                             busy = false
                                         }
@@ -633,7 +634,7 @@ fun ShiftScreen(
                                         operationError = null
                                     } catch (e: Exception) {
                                         errorMessage =
-                                            "Не удалось сохранить даты вахты."
+                                            e.message ?: "Не удалось сохранить даты вахты."
                                     } finally {
                                         busy = false
                                     }

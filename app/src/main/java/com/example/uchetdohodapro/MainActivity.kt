@@ -361,7 +361,7 @@ private fun HomeScreen(
     }
 
     val totalShifts = shifts.size
-    val totalWorkDays = days.size
+    val totalWorkDays = uniqueWorkDayCount(days)
     val recentDays = days.take(3)
 
     fun money(value: Double): String {

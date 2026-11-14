@@ -41,17 +41,7 @@ fun ShiftDetailsScreen(
     val advances = financeTotal(shiftOperations, ADVANCE)
     val fines = financeTotal(shiftOperations, FINE)
 
-    val dateFormatter = remember {
-        DateTimeFormatter.ofPattern("dd.MM.yyyy")
-    }
-
-    val sortedDays = days.sortedWith(
-        compareByDescending { day ->
-            runCatching {
-                LocalDate.parse(day.date, dateFormatter)
-            }.getOrNull() ?: LocalDate.MIN
-        }
-    )
+    val sortedDays = days.sortedWith(compareByDescending { parseStoredDate(it.date) ?: LocalDate.MIN })
 
     fun money(value: Double): String {
         return String.format(
@@ -144,7 +134,7 @@ fun ShiftDetailsScreen(
         HorizontalDivider()
 
         Text(
-            "Рабочих дней: ${days.size}",
+            "Рабочих дней: ${uniqueWorkDayCount(days)}",
             style = MaterialTheme.typography.titleMedium
         )
 

@@ -15,6 +15,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
+import com.example.uchetdohodapro.data.ShiftEntity
 import com.example.uchetdohodapro.data.TariffEntity
 import com.example.uchetdohodapro.data.WorkDayEntity
 import com.example.uchetdohodapro.data.WorkDatabase
@@ -56,6 +57,11 @@ fun WorkDayScreen(onBack: () -> Unit = {}) {
         mutableStateOf<Long?>(null)
     }
 
+    var availableShifts by remember { mutableStateOf<List<ShiftEntity>>(emptyList()) }
+    var automaticShift by remember { mutableStateOf(true) }
+    var selectedShiftId by remember { mutableStateOf<Long?>(null) }
+    var showShiftPicker by remember { mutableStateOf(false) }
+
     // Порядковые номера вахт.
     // Внутренние ID базы данных не изменяются.
     var shiftNumbers by remember {
@@ -90,6 +96,7 @@ fun WorkDayScreen(onBack: () -> Unit = {}) {
 
     LaunchedEffect(dao) {
         dao.observeShifts().collect { shifts ->
+            availableShifts = shifts
 
             shiftNumbers = shifts
                 .sortedBy { it.id }
@@ -103,6 +110,8 @@ fun WorkDayScreen(onBack: () -> Unit = {}) {
             }?.id
         }
     }
+
+    val targetShiftId = if (automaticShift) activeShiftId else selectedShiftId
 
     val income =
         (picks.toDoubleOrNull() ?: 0.0) *
@@ -160,14 +169,14 @@ fun WorkDayScreen(onBack: () -> Unit = {}) {
                 Spacer(Modifier.height(6.dp))
 
                 Text(
-                    if (activeShiftId != null) {
-                        "Активная вахта №${
-                            shiftNumber(activeShiftId) ?: "—"
+                    if (targetShiftId != null) {
+                        "Вахта №${
+                            shiftNumber(targetShiftId) ?: "—"
                         }"
                     } else {
                         "Нет активной вахты"
                     },
-                    color = if (activeShiftId != null) {
+                    color = if (targetShiftId != null) {
                         Color(0xFF43D17D)
                     } else {
                         Color(0xFFFF9800)
@@ -179,8 +188,8 @@ fun WorkDayScreen(onBack: () -> Unit = {}) {
                 Spacer(Modifier.height(4.dp))
 
                 Text(
-                    if (activeShiftId != null) {
-                        "Рабочий день будет автоматически привязан к этой вахте."
+                    if (targetShiftId != null) {
+                        "Рабочий день будет привязан к этой вахте."
                     } else {
                         "Рабочий день сохранится без привязки к вахте."
                     },
@@ -190,7 +199,12 @@ fun WorkDayScreen(onBack: () -> Unit = {}) {
             }
         }
 
+        OutlinedButton(enabled = !saving, onClick = { showShiftPicker = true }) {
+            Text("Изменить привязку к вахте")
+        }
+
         OutlinedTextField(
+            enabled = !saving,
             value = date,
             onValueChange = {
                 date = it
@@ -209,7 +223,8 @@ fun WorkDayScreen(onBack: () -> Unit = {}) {
             {
                 picks = it
                 saved = false
-            }
+            },
+            enabled = !saving
         )
 
         WorkDayNumberField(
@@ -218,7 +233,8 @@ fun WorkDayScreen(onBack: () -> Unit = {}) {
             {
                 weight = it
                 saved = false
-            }
+            },
+            enabled = !saving
         )
 
         WorkDayNumberField(
@@ -227,7 +243,8 @@ fun WorkDayScreen(onBack: () -> Unit = {}) {
             {
                 volume = it
                 saved = false
-            }
+            },
+            enabled = !saving
         )
 
         WorkDayNumberField(
@@ -236,7 +253,8 @@ fun WorkDayScreen(onBack: () -> Unit = {}) {
             {
                 boxes = it
                 saved = false
-            }
+            },
+            enabled = !saving
         )
 
         WorkDayNumberField(
@@ -245,7 +263,8 @@ fun WorkDayScreen(onBack: () -> Unit = {}) {
             {
                 hours = it
                 saved = false
-            }
+            },
+            enabled = !saving
         )
 
         Card(
@@ -305,6 +324,7 @@ fun WorkDayScreen(onBack: () -> Unit = {}) {
 
         Button(
             onClick = {
+                if (saving || saved) return@Button
                 val parser = SimpleDateFormat(
                     "yyyy-MM-dd",
                     Locale.getDefault()
@@ -340,7 +360,7 @@ fun WorkDayScreen(onBack: () -> Unit = {}) {
                 val currentTariffs = tariffs
 
                 when {
-                    parsedDate == null -> {
+                    parsedDate == null || parsedDate != date -> {
                         error =
                             "Укажи дату в формате ГГГГ-ММ-ДД."
                     }
@@ -367,24 +387,24 @@ fun WorkDayScreen(onBack: () -> Unit = {}) {
                                 // Получаем внутренний ID
                                 // активной вахты из базы данных.
                                 val shiftId =
-                                    dao.getActiveShift()?.id
+                                    if (automaticShift) dao.getActiveShift()?.id else selectedShiftId
 
                                 dao.insertWorkDay(
                                     WorkDayEntity(
                                         date = parsedDate,
-                                        picks = picks.takeIf {
+                                        picks = values[0].takeIf {
                                             it.isNotBlank()
                                         }?.toDouble(),
-                                        weight = weight.takeIf {
+                                        weight = values[1].takeIf {
                                             it.isNotBlank()
                                         }?.toDouble(),
-                                        volume = volume.takeIf {
+                                        volume = values[2].takeIf {
                                             it.isNotBlank()
                                         }?.toDouble(),
-                                        boxes = boxes.takeIf {
+                                        boxes = values[3].takeIf {
                                             it.isNotBlank()
                                         }?.toDouble(),
-                                        hours = hours.takeIf {
+                                        hours = values[4].takeIf {
                                             it.isNotBlank()
                                         }?.toDouble(),
                                         picksRate =
@@ -436,13 +456,30 @@ fun WorkDayScreen(onBack: () -> Unit = {}) {
             )
         }
     }
+    if (showShiftPicker) {
+        AlertDialog(onDismissRequest = { showShiftPicker = false },
+            title = { Text("Привязка рабочего дня") },
+            text = {
+                Column(Modifier.heightIn(max = 350.dp).verticalScroll(rememberScrollState())) {
+                    TextButton(onClick = { automaticShift = true; saved = false; showShiftPicker = false }) { Text("Активная вахта автоматически") }
+                    TextButton(onClick = { automaticShift = false; selectedShiftId = null; saved = false; showShiftPicker = false }) { Text("Без привязки") }
+                    availableShifts.sortedBy { it.id }.forEach { shift ->
+                        TextButton(onClick = { automaticShift = false; selectedShiftId = shift.id; saved = false; showShiftPicker = false }) {
+                            Text("Вахта №${shiftNumber(shift.id)}: ${shift.startDate} — ${shift.endDate ?: "идёт"}")
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showShiftPicker = false }) { Text("Закрыть") } })
+    }
 }
 
 @Composable
 private fun WorkDayNumberField(
     label: String,
     value: String,
-    onValueChange: (String) -> Unit
+    onValueChange: (String) -> Unit,
+    enabled: Boolean = true
 ) {
     OutlinedTextField(
         value = value,
@@ -451,6 +488,7 @@ private fun WorkDayNumberField(
             Text(label)
         },
         singleLine = true,
+        enabled = enabled,
         keyboardOptions = KeyboardOptions(
             keyboardType = KeyboardType.Decimal
         ),

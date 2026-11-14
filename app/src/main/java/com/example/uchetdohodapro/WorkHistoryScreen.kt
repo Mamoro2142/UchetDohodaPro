@@ -98,7 +98,7 @@ fun WorkHistoryScreen() {
                             operationError = ""
                         } catch (e: Exception) {
                             operationError =
-                                "Не удалось сохранить изменения."
+                                e.message ?: "Не удалось сохранить изменения."
                         } finally {
                             saving = false
                         }

@@ -3,6 +3,9 @@ package com.example.uchetdohodapro.data
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Test
@@ -112,6 +115,65 @@ class BackupTest {
                 assertEquals(timestamp, dao.backupTariffs().single().savedAt)
             } finally { db.close(); context.deleteDatabase(name) }
         }
+    }
+
+    @Test fun strictDatesAndUniqueDayCountDoNotRewriteHistory() {
+        assertNull(parseStoredDate("31.02.2026"))
+        assertNull(parseStoredDate("2026-10-24junk"))
+        assertEquals(parseStoredDate("24.10.2026"), parseStoredDate("2026-10-24"))
+        val day = snapshot.days.single()
+        assertEquals(1, uniqueWorkDayCount(listOf(day, day.copy(id = 8, date = "24.10.2026"))))
+        assertTrue(dayBelongsToShift("2026-10-01", snapshot.shifts.single()))
+        assertTrue(dayBelongsToShift("2026-10-31", snapshot.shifts.single()))
+        assertFalse(dayBelongsToShift("2026-11-01", snapshot.shifts.single()))
+    }
+
+    @Test fun concurrentShiftCreationAllowsOnlyOneActiveShift() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), WorkDatabase::class.java).build()
+        try {
+            val dao = db.workDao()
+            val results = coroutineScope {
+                (1..20).map { async { runCatching { dao.insertShift(ShiftEntity(startDate = "01.11.2026")) } } }.awaitAll()
+            }
+            assertEquals(1, results.count { it.isSuccess })
+            assertEquals(1, dao.backupShifts().size)
+            val active = dao.backupShifts().single()
+            dao.updateShift(active.copy(endDate = "02.11.2026", isActive = false))
+            assertTrue(dao.insertShift(ShiftEntity(startDate = "03.11.2026")) > active.id)
+        } finally { db.close() }
+    }
+
+    @Test fun bindingChecksBoundsAndDeletionPreservesDaysAndRates() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), WorkDatabase::class.java).build()
+        try {
+            BackupRepository(db).restore(snapshot)
+            val dao = db.workDao()
+            val original = dao.backupDays().single()
+            assertTrue(runCatching { dao.insertWorkDay(original.copy(id = 0)) }.isFailure)
+            assertTrue(runCatching { dao.assignWorkDayToShift(original.id, 999) }.isFailure)
+            assertTrue(runCatching { dao.insertWorkDay(original.copy(id = 0, date = "2026-11-01")) }.isFailure)
+            val next = dao.insertShift(ShiftEntity(startDate = "01.11.2026", endDate = "30.11.2026", isActive = false))
+            assertTrue(runCatching { dao.assignWorkDayToShift(original.id, next) }.isFailure)
+            assertTrue(runCatching { dao.updateShift(snapshot.shifts.single().copy(startDate = "25.10.2026")) }.isFailure)
+            assertEquals(snapshot.shifts.single(), dao.getShift(9))
+            val id = dao.insertWorkDay(original.copy(id = 0, date = "2026-11-05", shiftId = null))
+            dao.assignWorkDayToShift(id, next)
+            val assigned = dao.getWorkDay(id)!!
+            assertEquals(original.calculateIncome(), assigned.calculateIncome(), 0.0)
+            dao.deleteShiftSafely(next)
+            assertEquals(assigned.copy(shiftId = null), dao.getWorkDay(id))
+            assertEquals(original, dao.getWorkDay(original.id))
+        } finally { db.close() }
+    }
+
+    @Test fun historicalDateMismatchCanBeEditedWithoutRepricingOrMoving() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), WorkDatabase::class.java).build()
+        try {
+            val legacy = snapshot.days.single().copy(date = "2026-09-30")
+            BackupRepository(db).restore(snapshot.copy(days = listOf(legacy)))
+            db.workDao().updateWorkDay(legacy.copy(picks = 2.0))
+            assertEquals(legacy.copy(picks = 2.0), db.workDao().getWorkDay(legacy.id))
+        } finally { db.close() }
     }
 
     @Test fun operationAmountsUseExactCentsAndRejectInvalidInputs() {
