@@ -128,7 +128,7 @@ class UpgradeRegressionTest : RegressionBase() {
         compose.onNodeWithText("2026-10-24").performScrollTo().assertIsDisplayed()
         compose.onAllNodesWithText("Вес:", substring = true).assertCountEquals(0)
         compose.onAllNodesWithText("Объём:", substring = true).assertCountEquals(0)
-        compose.onAllNodesWithText("Коробки:", substring = true).assertCountEquals(0)
+        compose.onAllNodesWithText("Боксы:", substring = true).assertCountEquals(0)
         shot("03-empty-metrics-hidden")
         device.pressBack()
         profile()

@@ -175,13 +175,13 @@ fun ShiftDetailsScreen(
         )
 
         ShiftMetricRow(
-            "Коробки",
+            "Боксы",
             number(boxes),
             money(boxesIncome)
         )
 
         ShiftMetricRow(
-            "Доп. часы",
+            "Часы",
             number(hours),
             money(hoursIncome)
         )
@@ -258,13 +258,13 @@ fun ShiftDetailsScreen(
 
                         if (day.boxes != null) {
                             Text(
-                                "Коробки: ${number(day.boxes)}"
+                                "Боксы: ${number(day.boxes)}"
                             )
                         }
 
                         if (day.hours != null) {
                             Text(
-                                "Доп. часы: ${number(day.hours)}",
+                                "Часы: ${number(day.hours)}",
                                 color = DetailsOrange
                             )
                         }

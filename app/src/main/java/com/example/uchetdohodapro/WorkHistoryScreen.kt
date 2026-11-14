@@ -365,7 +365,7 @@ private fun WorkHistoryCard(
 
             if (day.boxes != null) {
                 Text(
-                    "Коробки: ${day.boxes}",
+                    "Боксы: ${day.boxes}",
                     color = HistoryText
                 )
             }
@@ -490,7 +490,7 @@ private fun WorkDayEditScreen(
         )
 
         HistoryNumberField(
-            "Коробки",
+            "Боксы",
             boxes,
             { boxes = it },
             !saving
