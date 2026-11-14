@@ -8,12 +8,23 @@ collect_evidence() {
   adb pull "/sdcard/Android/data/$package_name/files/regression" regression-evidence/ || true
 }
 trap collect_evidence EXIT
-adb shell wm size 480x800
-adb shell wm density 240
 # Android 8 does not grant CHANGE_WIFI_STATE to the shell user.
 # Root is available only on this disposable google_apis emulator.
-adb root
-adb wait-for-device
+# adbd may close the connection while restarting even when root succeeds.
+# Verify readiness explicitly; do not proceed with reduced offline coverage.
+root_ready=0
+for attempt in 1 2 3 4 5; do
+  if ! timeout 30s adb wait-for-device; then continue; fi
+  timeout 20s adb root || true
+  if ! timeout 30s adb wait-for-device; then continue; fi
+  if [ "$(timeout 10s adb shell id -u | tr -d '\r')" = "0" ]; then
+    root_ready=1
+    break
+  fi
+done
+test "$root_ready" -eq 1
+adb shell wm size 480x800
+adb shell wm density 240
 adb shell svc wifi disable
 adb shell svc data disable
 adb install -r baseline/app-debug.apk
