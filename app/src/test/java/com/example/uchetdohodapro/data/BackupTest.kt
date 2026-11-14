@@ -79,14 +79,15 @@ class BackupTest {
 
     @Test fun tariffMigrationsPreserveAllOldVersionsAndUnknownSaveDate() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
-        for (version in 1..3) {
+        for (version in 1..4) {
             val name = "tariff-migration-$version.db"
             context.deleteDatabase(name)
             context.openOrCreateDatabase(name, 0, null).use { old ->
-                old.execSQL("CREATE TABLE tariffs (id INTEGER NOT NULL PRIMARY KEY, picksRate REAL NOT NULL, weightRate REAL NOT NULL, volumeRate REAL NOT NULL, boxesRate REAL NOT NULL, hoursRate REAL NOT NULL)")
+                val savedColumn = if (version >= 4) ", savedAt INTEGER" else ""
+                old.execSQL("CREATE TABLE tariffs (id INTEGER NOT NULL PRIMARY KEY, picksRate REAL NOT NULL, weightRate REAL NOT NULL, volumeRate REAL NOT NULL, boxesRate REAL NOT NULL, hoursRate REAL NOT NULL$savedColumn)")
                 val shiftColumn = if (version >= 3) ", shiftId INTEGER" else ""
                 old.execSQL("CREATE TABLE work_days (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, date TEXT NOT NULL, picks REAL, weight REAL, volume REAL, boxes REAL, hours REAL, picksRate REAL NOT NULL, weightRate REAL NOT NULL, volumeRate REAL NOT NULL, boxesRate REAL NOT NULL, hoursRate REAL NOT NULL$shiftColumn)")
-                old.execSQL("INSERT INTO tariffs VALUES (1, 99, 0, 0, 0, 0)")
+                old.execSQL("INSERT INTO tariffs (id, picksRate, weightRate, volumeRate, boxesRate, hoursRate) VALUES (1, 99, 0, 0, 0, 0)")
                 old.execSQL("INSERT INTO work_days (id, date, picks, picksRate, weightRate, volumeRate, boxesRate, hoursRate) VALUES (7, '2026-10-24', 1.234, 2.5, 0, 0, 0, 0)")
                 if (version >= 2) {
                     old.execSQL("CREATE TABLE shifts (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, startDate TEXT NOT NULL, endDate TEXT, isActive INTEGER NOT NULL)")
@@ -96,7 +97,7 @@ class BackupTest {
                 old.version = version
             }
             val db = Room.databaseBuilder(context, WorkDatabase::class.java, name)
-                .addMigrations(WorkDatabase.MIGRATION_1_2, WorkDatabase.MIGRATION_2_3, WorkDatabase.MIGRATION_3_4).build()
+                .addMigrations(WorkDatabase.MIGRATION_1_2, WorkDatabase.MIGRATION_2_3, WorkDatabase.MIGRATION_3_4, WorkDatabase.MIGRATION_4_5).build()
             try {
                 val dao = db.workDao()
                 assertNull(dao.backupTariffs().single().savedAt)
@@ -113,11 +114,63 @@ class BackupTest {
         }
     }
 
+    @Test fun operationAmountsUseExactCentsAndRejectInvalidInputs() {
+        assertEquals(150L, parseOperationMinor("1.5"))
+        assertEquals(150L, parseOperationMinor("1,5"))
+        assertEquals(25L, parseOperationMinor("0,25"))
+        assertEquals(100075L, parseOperationMinor("1000.75"))
+        listOf("0", "-1", "NaN", "Infinity", "1.234", "1,2,3", "922337203685477581").forEach {
+            assertNull(parseOperationMinor(it))
+        }
+    }
+
+    @Test fun financialCrudAndShiftDeletionNeverChangeDayIncome() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), WorkDatabase::class.java).build()
+        try {
+            val repository = BackupRepository(db)
+            repository.restore(snapshot)
+            val dao = db.workDao()
+            val originalDay = dao.backupDays().single()
+            dao.saveMoneyOperation(MoneyOperationEntity(shiftId = 9, date = "2026-10-24", type = ADVANCE, amountMinor = 12550))
+            dao.saveMoneyOperation(MoneyOperationEntity(shiftId = 9, date = "2026-10-24", type = FINE, amountMinor = 525))
+            val operations = dao.backupMoneyOperations()
+            assertEquals(125.50, financeTotal(operations, ADVANCE), 0.0)
+            assertEquals(5.25, financeTotal(operations, FINE), 0.0)
+            assertEquals(originalDay, dao.backupDays().single())
+            val copy = BackupFormat.decode(repository.export())
+            repository.restore(copy)
+            assertEquals(operations, dao.backupMoneyOperations())
+            val advance = operations.first { it.type == ADVANCE }
+            dao.saveMoneyOperation(advance.copy(amountMinor = 5025))
+            dao.deleteMoneyOperation(operations.first { it.type == FINE }.id)
+            assertEquals(50.25, financeTotal(dao.backupMoneyOperations(), ADVANCE), 0.0)
+            assertEquals(0.0, financeTotal(dao.backupMoneyOperations(), FINE), 0.0)
+            assertTrue(runCatching { dao.saveMoneyOperation(advance.copy(amountMinor = -1)) }.isFailure)
+            assertTrue(runCatching { dao.saveMoneyOperation(advance.copy(shiftId = 888)) }.isFailure)
+            dao.deleteShiftSafely(9)
+            assertEquals(originalDay.copy(shiftId = null), dao.backupDays().single())
+            assertNull(dao.backupMoneyOperations().single().shiftId)
+            assertEquals(50.25, financeTotal(dao.backupMoneyOperations(), ADVANCE), 0.0)
+            assertEquals(1, BackupFormat.decode(repository.export()).operations.size)
+        } finally { db.close() }
+    }
+
+    @Test fun versionTwoBackupRestoresWithoutInventedOperations() {
+        val envelope = JSONObject(BackupFormat.encode(snapshot))
+        val payload = JSONObject(envelope.getString("payload"))
+        payload.remove("operations")
+        val text = payload.toString()
+        val hash = java.security.MessageDigest.getInstance("SHA-256").digest(text.toByteArray()).joinToString("") { "%02x".format(it) }
+        envelope.put("payload", text).put("sha256", hash).put("formatVersion", 2)
+        assertEquals(snapshot, BackupFormat.decode(envelope.toString()))
+    }
+
     @Test fun insertionFailureRollsBackAllTables() = runBlocking {
         val db = Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), WorkDatabase::class.java).build()
         try {
             val repository = BackupRepository(db)
             repository.restore(snapshot)
+            db.workDao().saveMoneyOperation(MoneyOperationEntity(shiftId = 9, date = "2026-10-24", type = ADVANCE, amountMinor = 1000))
             val before = repository.export()
             db.openHelper.writableDatabase.execSQL("CREATE TRIGGER fail_restore BEFORE INSERT ON work_days BEGIN SELECT RAISE(ABORT, 'test failure'); END")
             assertTrue(runCatching { repository.restore(snapshot.copy(tariffs = emptyList())) }.isFailure)

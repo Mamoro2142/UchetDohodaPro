@@ -71,7 +71,7 @@ fun BackupControls() {
             } finally { busy = false }
         }
     }
-    Text("Все рабочие дни, их тарифы, текущие тарифы и вахты сохраняются в файл.", style = MaterialTheme.typography.bodySmall)
+    Text("Все рабочие дни, их тарифы, текущие тарифы, вахты, авансы и штрафы сохраняются в файл.", style = MaterialTheme.typography.bodySmall)
     Spacer(Modifier.height(8.dp))
     Button(enabled = !busy && candidate == null, modifier = Modifier.fillMaxWidth(), onClick = {
         busy = true
@@ -100,7 +100,7 @@ fun BackupControls() {
         AlertDialog(
             onDismissRequest = { if (!busy) candidate = null },
             title = { Text("Заменить данные приложения?") },
-            text = { Text("Будут восстановлены ${snapshot.days.size} рабочих дней и ${snapshot.shifts.size} вахт. Текущие записи будут заменены целиком. Сначала рекомендуется создать резервную копию текущих данных.") },
+            text = { Text("Будут восстановлены ${snapshot.days.size} рабочих дней и ${snapshot.shifts.size} вахт и ${snapshot.operations.size} финансовых операций. Текущие записи будут заменены целиком. Сначала рекомендуется создать резервную копию текущих данных.") },
             confirmButton = { TextButton(enabled = !busy, onClick = {
                 busy = true
                 scope.launch {

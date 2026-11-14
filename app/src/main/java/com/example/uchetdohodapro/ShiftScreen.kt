@@ -13,6 +13,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import com.example.uchetdohodapro.data.ShiftEntity
 import com.example.uchetdohodapro.data.WorkDatabase
+import com.example.uchetdohodapro.data.financeTotal
+import com.example.uchetdohodapro.data.ADVANCE
+import com.example.uchetdohodapro.data.FINE
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -37,6 +40,8 @@ fun ShiftScreen(
     val workDays by remember(dao) {
         dao.observeWorkDays()
     }.collectAsState(initial = emptyList())
+
+    val operations by remember(dao) { dao.observeMoneyOperations() }.collectAsState(initial = emptyList())
 
     val activeShift = shifts.firstOrNull {
         it.isActive
@@ -318,6 +323,12 @@ fun ShiftScreen(
                             style = MaterialTheme.typography.titleLarge
                         )
 
+                        val shiftOperations = operations.filter { it.shiftId == shift.id }
+                        val advances = financeTotal(shiftOperations, ADVANCE)
+                        val fines = financeTotal(shiftOperations, FINE)
+                        Text("Авансы: ${money(advances)} · Штрафы: ${money(fines)}")
+                        Text("Остаток к получению: ${money(shiftIncome(shift.id) - advances - fines)}")
+
                         Button(
                             onClick = {
                                 selectedShift = shift
@@ -435,7 +446,7 @@ fun ShiftScreen(
                     )
 
                     Text(
-                        "Все рабочие дни сохранятся и перейдут в категорию «Без привязки». Заработок и тарифы не изменятся."
+                        "Все рабочие дни и финансовые операции сохранятся без привязки. Заработок и тарифы не изменятся."
                     )
 
                     if (shift.isActive) {

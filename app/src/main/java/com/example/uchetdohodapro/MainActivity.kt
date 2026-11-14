@@ -23,7 +23,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.uchetdohodapro.data.WorkDatabase
+import com.example.uchetdohodapro.data.*
 import java.util.Locale
 
 private val Background = Color(0xFF111315)
@@ -352,6 +352,10 @@ private fun HomeScreen(
         dao.observeShifts()
     }.collectAsState(initial = emptyList())
 
+    val operations by remember(dao) { dao.observeMoneyOperations() }.collectAsState(initial = emptyList())
+    val advances = financeTotal(operations, ADVANCE)
+    val fines = financeTotal(operations, FINE)
+
     val totalIncome = days.sumOf {
         it.calculateIncome()
     }
@@ -444,16 +448,18 @@ private fun HomeScreen(
 
                     MiniValue(
                         "Авансы",
-                        "0 ₽",
+                        money(advances),
                         Orange
                     )
 
                     MiniValue(
                         "Штрафы",
-                        "0 ₽",
+                        money(fines),
                         Red
                     )
                 }
+                Spacer(Modifier.height(10.dp))
+                Text("Остаток к получению: ${money(totalIncome - advances - fines)}", color = MainText)
             }
         }
 
@@ -809,5 +815,7 @@ private fun ProfileScreen(
                 BackupControls()
             }
         }
+        Spacer(Modifier.height(14.dp))
+        MoneyOperationsPanel()
     }
 }

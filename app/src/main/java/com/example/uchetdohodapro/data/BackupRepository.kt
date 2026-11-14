@@ -12,7 +12,8 @@ import java.util.Locale
 data class BackupSnapshot(
     val tariffs: List<TariffEntity>,
     val days: List<WorkDayEntity>,
-    val shifts: List<ShiftEntity>
+    val shifts: List<ShiftEntity>,
+    val operations: List<MoneyOperationEntity> = emptyList()
 )
 
 object BackupFormat {
@@ -39,13 +40,17 @@ object BackupFormat {
                             .forEachIndexed { i, v -> put(metrics[i] + "Rate", v) }
                     })
             } })
+            put("operations", JSONArray().apply { snapshot.operations.forEach { o ->
+                put(JSONObject().put("id", o.id).put("shiftId", o.shiftId ?: JSONObject.NULL)
+                    .put("date", o.date).put("type", o.type).put("amountMinor", o.amountMinor).put("comment", o.comment))
+            } })
             put("shifts", JSONArray().apply { snapshot.shifts.forEach { s ->
                 put(JSONObject().put("id", s.id).put("startDate", s.startDate)
                     .put("endDate", s.endDate ?: JSONObject.NULL).put("isActive", s.isActive))
             } })
         }.toString()
         return JSONObject().put("applicationId", "com.example.uchetdohodapro")
-            .put("formatVersion", 2).put("payload", payload).put("sha256", digest(payload))
+            .put("formatVersion", 3).put("payload", payload).put("sha256", digest(payload))
             .toString().also { require(it.toByteArray(Charsets.UTF_8).size <= MAX_BYTES) { "Слишком большая копия" } }
     }
 
@@ -54,7 +59,7 @@ object BackupFormat {
         val envelope = JSONObject(text)
         require(envelope.getString("applicationId") == "com.example.uchetdohodapro") { "Файл другого приложения" }
         val version = envelope.get("formatVersion")
-        require(version == 1 || version == 2) { "Неподдерживаемая версия резервной копии" }
+        require(version == 1 || version == 2 || version == 3) { "Неподдерживаемая версия резервной копии" }
         val payload = envelope.getString("payload")
         require(digest(payload) == envelope.getString("sha256")) { "Нарушена целостность файла" }
         val json = JSONObject(payload)
@@ -90,6 +95,10 @@ object BackupFormat {
                 require(s.get("isActive") is Boolean)
                 ShiftEntity(s.id("id"), s.getString("startDate"),
                     if (s.get("endDate") == JSONObject.NULL) null else s.getString("endDate"), s.getBoolean("isActive"))
+            },
+            if (version != 3) emptyList() else objects("operations").map { o ->
+                MoneyOperationEntity(o.id("id"), if (o.get("shiftId") == JSONObject.NULL) null else o.id("shiftId"),
+                    o.getString("date"), o.getString("type"), o.id("amountMinor"), o.getString("comment"))
             }
         )
         validate(snapshot)
@@ -112,6 +121,10 @@ object BackupFormat {
         require(snapshot.days.all { it.id > 0 } && snapshot.days.map { it.id }.distinct().size == snapshot.days.size) { "Повторные ID дней" }
         require(snapshot.shifts.all { it.id > 0 } && snapshot.shifts.map { it.id }.distinct().size == snapshot.shifts.size) { "Повторные ID вахт" }
         val ids = snapshot.shifts.map { it.id }.toSet()
+        require(snapshot.operations.all { it.id > 0 } && snapshot.operations.map { it.id }.distinct().size == snapshot.operations.size) { "Повторные ID операций" }
+        require(snapshot.operations.all { (it.shiftId == null || it.shiftId in ids) &&
+            (it.type == ADVANCE || it.type == FINE) && it.amountMinor > 0 && validOperationDate(it.date) && it.comment.length <= 4000
+        }) { "Некорректная финансовая операция" }
         require(snapshot.days.all { it.shiftId == null || it.shiftId in ids }) { "Рабочий день ссылается на отсутствующую вахту" }
         require(snapshot.days.all { parseDate(it.date) != null } && snapshot.shifts.all {
             parseDate(it.startDate) != null && (it.endDate == null ||
@@ -127,7 +140,7 @@ object BackupFormat {
 class BackupRepository(private val db: WorkDatabase) {
     suspend fun export(): String = db.withTransaction {
         val dao = db.workDao()
-        BackupFormat.encode(BackupSnapshot(dao.backupTariffs(), dao.backupDays(), dao.backupShifts()))
+        BackupFormat.encode(BackupSnapshot(dao.backupTariffs(), dao.backupDays(), dao.backupShifts(), dao.backupMoneyOperations()))
     }
 
     suspend fun restore(snapshot: BackupSnapshot) {
@@ -135,12 +148,14 @@ class BackupRepository(private val db: WorkDatabase) {
         BackupFormat.validate(snapshot)
         db.withTransaction {
             val dao = db.workDao()
+            dao.clearMoneyOperationsForRestore()
             dao.clearDaysForRestore()
             dao.clearShiftsForRestore()
             dao.clearTariffsForRestore()
             dao.restoreShifts(snapshot.shifts)
             snapshot.tariffs.forEach { dao.saveTariffs(it) }
             dao.restoreDays(snapshot.days)
+            dao.restoreMoneyOperations(snapshot.operations)
         }
     }
 }

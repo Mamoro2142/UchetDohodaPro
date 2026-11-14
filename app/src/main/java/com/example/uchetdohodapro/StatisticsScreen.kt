@@ -26,7 +26,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.uchetdohodapro.data.WorkDatabase
+import com.example.uchetdohodapro.data.*
 import java.util.Locale
 
 private val StatsBackground = Color(0xFF111315)
@@ -57,6 +57,10 @@ fun StatisticsScreen() {
         dao.observeWorkDays()
     }.collectAsState(initial = emptyList())
 
+    val operations by remember(dao) { dao.observeMoneyOperations() }.collectAsState(initial = emptyList())
+    val advances = financeTotal(operations, ADVANCE)
+    val fines = financeTotal(operations, FINE)
+
     val totalIncome = days.sumOf {
         it.calculateIncome()
     }
@@ -71,7 +75,7 @@ fun StatisticsScreen() {
         it.calculateIncome()
     }
 
-    val monthlyIncome = days
+    val dayMonthlyIncome = days
         .filter {
             it.date.length >= 7 &&
                 it.date[4] == '-'
@@ -87,6 +91,10 @@ fun StatisticsScreen() {
         .toSortedMap(
             compareByDescending { it }
         )
+
+    val monthlyIncome = (dayMonthlyIncome.keys + operations.map { it.date.take(7) }).associateWith {
+        dayMonthlyIncome[it] ?: 0.0
+    }.toSortedMap(compareByDescending { it })
 
     Column(
         modifier = Modifier
@@ -144,6 +152,9 @@ fun StatisticsScreen() {
                     fontSize = 32.sp,
                     fontWeight = FontWeight.Bold
                 )
+                Text("Авансы: ${statsMoney(advances)}")
+                Text("Штрафы: ${statsMoney(fines)}")
+                Text("Остаток к получению: ${statsMoney(totalIncome - advances - fines)}")
             }
         }
 
@@ -261,6 +272,11 @@ fun StatisticsScreen() {
                             )
                         }
 
+                        val monthlyOperations = operations.filter { it.date.startsWith(month) }
+                        val monthAdvances = financeTotal(monthlyOperations, ADVANCE)
+                        val monthFines = financeTotal(monthlyOperations, FINE)
+                        Text("Авансы: ${statsMoney(monthAdvances)} · Штрафы: ${statsMoney(monthFines)}", color = StatsSecondary)
+                        Text("Остаток: ${statsMoney(income - monthAdvances - monthFines)}", color = StatsText)
                         Spacer(Modifier.height(12.dp))
 
                         androidx.compose.foundation.layout.Box(

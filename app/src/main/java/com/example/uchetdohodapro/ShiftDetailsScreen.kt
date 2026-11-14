@@ -12,7 +12,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.uchetdohodapro.data.ShiftEntity
-import com.example.uchetdohodapro.data.WorkDatabase
+import com.example.uchetdohodapro.data.*
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -35,6 +35,11 @@ fun ShiftDetailsScreen(
     val days by remember(dao, shift.id) {
         dao.observeWorkDaysForShift(shift.id)
     }.collectAsState(initial = emptyList())
+
+    val operations by remember(dao) { dao.observeMoneyOperations() }.collectAsState(initial = emptyList())
+    val shiftOperations = operations.filter { it.shiftId == shift.id }
+    val advances = financeTotal(shiftOperations, ADVANCE)
+    val fines = financeTotal(shiftOperations, FINE)
 
     val dateFormatter = remember {
         DateTimeFormatter.ofPattern("dd.MM.yyyy")
@@ -150,6 +155,10 @@ fun ShiftDetailsScreen(
             fontWeight = FontWeight.Bold
         )
 
+        HorizontalDivider()
+
+        Text("Остаток к получению: ${money(totalIncome - advances - fines)}", style = MaterialTheme.typography.titleMedium)
+        MoneyOperationsPanel(shift.id)
         HorizontalDivider()
 
         Text(

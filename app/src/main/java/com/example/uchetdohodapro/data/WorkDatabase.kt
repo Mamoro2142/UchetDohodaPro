@@ -16,6 +16,11 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 import androidx.room.Transaction
+import androidx.room.ForeignKey
+import androidx.room.Index
+import java.math.BigDecimal
+import java.math.RoundingMode
+import java.time.LocalDate
 
 @Entity(tableName = "tariffs")
 data class TariffEntity(
@@ -63,8 +68,74 @@ data class ShiftEntity(
     val isActive: Boolean = true
 )
 
+const val ADVANCE = "advance"
+const val FINE = "fine"
+
+@Entity(
+    tableName = "money_operations",
+    foreignKeys = [ForeignKey(entity = ShiftEntity::class, parentColumns = ["id"],
+        childColumns = ["shiftId"], onDelete = ForeignKey.SET_NULL)],
+    indices = [Index("shiftId")]
+)
+data class MoneyOperationEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val shiftId: Long?,
+    val date: String,
+    val type: String,
+    val amountMinor: Long,
+    val comment: String = ""
+)
+
+fun parseOperationMinor(text: String): Long? = runCatching {
+    val normalized = text.trim().replace(',', '.')
+    require(normalized.matches(Regex("[0-9]+([.][0-9]{1,2})?")))
+    BigDecimal(normalized).setScale(2, RoundingMode.UNNECESSARY).movePointRight(2).longValueExact()
+        .also { require(it > 0) }
+}.getOrNull()
+
+fun validOperationDate(text: String): Boolean = text.matches(Regex("[0-9]{4}-[0-9]{2}-[0-9]{2}")) &&
+    runCatching { LocalDate.parse(text).toString() == text }.getOrDefault(false)
+
+fun financeTotal(operations: List<MoneyOperationEntity>, type: String): Double =
+    operations.filter { it.type == type }.sumOf { BigDecimal.valueOf(it.amountMinor, 2) }.toDouble()
+
 @Dao
 interface WorkDao {
+    @Query("SELECT * FROM money_operations ORDER BY date DESC, id DESC")
+    fun observeMoneyOperations(): Flow<List<MoneyOperationEntity>>
+
+    @Query("SELECT * FROM money_operations ORDER BY id")
+    suspend fun backupMoneyOperations(): List<MoneyOperationEntity>
+
+    @Query("SELECT * FROM shifts WHERE id = :shiftId")
+    suspend fun getShift(shiftId: Long): ShiftEntity?
+
+    @Insert
+    suspend fun insertMoneyOperationRaw(operation: MoneyOperationEntity): Long
+
+    @Update
+    suspend fun updateMoneyOperationRaw(operation: MoneyOperationEntity): Int
+
+    @Transaction
+    suspend fun saveMoneyOperation(operation: MoneyOperationEntity) {
+        require(operation.type == ADVANCE || operation.type == FINE) { "Неизвестная операция" }
+        require(operation.amountMinor > 0) { "Сумма должна быть больше нуля" }
+        require(validOperationDate(operation.date)) { "Неверная дата" }
+        require(operation.shiftId != null && getShift(operation.shiftId) != null) { "Выберите существующую вахту" }
+        require(operation.comment.length <= 4000) { "Слишком длинный комментарий" }
+        if (operation.id == 0L) insertMoneyOperationRaw(operation)
+        else check(updateMoneyOperationRaw(operation) == 1) { "Операция уже удалена" }
+    }
+
+    @Query("DELETE FROM money_operations WHERE id = :id")
+    suspend fun deleteMoneyOperation(id: Long)
+
+    @Query("DELETE FROM money_operations")
+    suspend fun clearMoneyOperationsForRestore()
+
+    @Insert
+    suspend fun restoreMoneyOperations(operations: List<MoneyOperationEntity>)
+
 
     @Query("SELECT * FROM tariffs ORDER BY id")
     suspend fun backupTariffs(): List<TariffEntity>
@@ -177,9 +248,10 @@ interface WorkDao {
     entities = [
         TariffEntity::class,
         WorkDayEntity::class,
-        ShiftEntity::class
+        ShiftEntity::class,
+        MoneyOperationEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class WorkDatabase : RoomDatabase() {
@@ -223,6 +295,18 @@ abstract class WorkDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""CREATE TABLE IF NOT EXISTS `money_operations` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `shiftId` INTEGER, `date` TEXT NOT NULL, `type` TEXT NOT NULL,
+                    `amountMinor` INTEGER NOT NULL, `comment` TEXT NOT NULL,
+                    FOREIGN KEY(`shiftId`) REFERENCES `shifts`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL
+                )""".trimIndent())
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_money_operations_shiftId` ON `money_operations` (`shiftId`)")
+            }
+        }
+
         fun getInstance(context: Context): WorkDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -233,7 +317,8 @@ abstract class WorkDatabase : RoomDatabase() {
                     .addMigrations(
                         MIGRATION_1_2,
                         MIGRATION_2_3,
-                        MIGRATION_3_4
+                        MIGRATION_3_4,
+                        MIGRATION_4_5
                     )
                     .build()
                     .also { INSTANCE = it }
