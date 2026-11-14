@@ -10,10 +10,12 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 40
 
     steps:
       - name: Download source code
@@ -69,7 +71,7 @@ jobs:
             exit 1
           fi
 
-          gradle testDebugUnitTest lintDebug assembleDebug
+          gradle testDebugUnitTest lintDebug assembleDebug assembleDebugAndroidTest
       - name: Verify restored keystore certificate
         env:
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -86,6 +88,40 @@ jobs:
             --print-certs \
             app/build/outputs/apk/debug/app-debug.apk
 
+      - name: Download original signed 1.0.9 for upgrade test
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p baseline
+          gh api repos/${{ github.repository }}/actions/artifacts/12460847768/zip > "$RUNNER_TEMP/baseline.zip"
+          unzip -q "$RUNNER_TEMP/baseline.zip" -d baseline
+          test -s baseline/app-debug.apk
+          old_cert=$("$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs baseline/app-debug.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
+          new_cert=$("$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs app/build/outputs/apk/debug/app-debug.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
+          test -n "$old_cert"
+          test "$old_cert" = "$new_cert"
+
+      - name: Enable KVM for this runner
+        run: |
+          sudo chown "$(id -u):$(id -g)" /dev/kvm
+          sudo chmod 600 /dev/kvm
+
+      - name: Test update, offline small screen and SAF recovery
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/uchet-pro.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        with:
+          api-level: 26
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot-save
+          script: bash scripts/emulator-regression.sh
+
       - name: Save verification reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -94,6 +130,8 @@ jobs:
           path: |
             app/build/reports/
             app/build/test-results/
+            app/build/outputs/androidTest-results/
+            regression-evidence/
           if-no-files-found: warn
 
       - name: Save APK
