@@ -166,6 +166,9 @@ interface WorkDao {
     @Query("SELECT * FROM shifts WHERE id = :shiftId")
     suspend fun getShift(shiftId: Long): ShiftEntity?
 
+    @Query("SELECT * FROM money_operations WHERE id = :id")
+    suspend fun getMoneyOperation(id: Long): MoneyOperationEntity?
+
     @Insert
     suspend fun insertMoneyOperationRaw(operation: MoneyOperationEntity): Long
 
@@ -177,7 +180,13 @@ interface WorkDao {
         require(operation.type == ADVANCE || operation.type == FINE) { "Неизвестная операция" }
         require(operation.amountMinor > 0) { "Сумма должна быть больше нуля" }
         require(validOperationDate(operation.date)) { "Неверная дата" }
-        require(operation.shiftId != null && getShift(operation.shiftId) != null) { "Выберите существующую вахту" }
+        val previous = if (operation.id == 0L) null else getMoneyOperation(operation.id)
+        require(operation.id == 0L || previous != null) { "Операция уже удалена" }
+        if (operation.shiftId == null) {
+            // Deleting a shift preserves its operations. Editing an orphan must not
+            // silently move it into another shift or require recreating a shift.
+            require(previous != null && previous.shiftId == null) { "Выберите существующую вахту" }
+        } else require(getShift(operation.shiftId) != null) { "Выберите существующую вахту" }
         require(operation.comment.length <= 4000) { "Слишком длинный комментарий" }
         if (operation.id == 0L) insertMoneyOperationRaw(operation)
         else check(updateMoneyOperationRaw(operation) == 1) { "Операция уже удалена" }

@@ -58,7 +58,8 @@ fun MoneyOperationsPanel(shiftId: Long? = null) {
     if (showForm) {
         val current = editing
         var selectedShift by remember(current?.id, shiftId) {
-            mutableStateOf(shiftId ?: current?.shiftId ?: shifts.firstOrNull { it.isActive }?.id ?: shifts.firstOrNull()?.id)
+            mutableStateOf(if (current != null) current.shiftId else
+                shiftId ?: shifts.firstOrNull { it.isActive }?.id ?: shifts.firstOrNull()?.id)
         }
         var type by remember(current?.id) { mutableStateOf(current?.type ?: ADVANCE) }
         var date by remember(current?.id) { mutableStateOf(current?.date ?: LocalDate.now().toString()) }
@@ -81,11 +82,15 @@ fun MoneyOperationsPanel(shiftId: Long? = null) {
                     OutlinedTextField(value = comment, onValueChange = { if (it.length <= 4000) comment = it }, enabled = !busy,
                         label = { Text("Комментарий (необязательно)") })
                     Text("Вахта")
+                    if (shiftId == null && current != null && current.shiftId == null) {
+                        FilterChip(enabled = !busy, selected = selectedShift == null,
+                            onClick = { selectedShift = null }, label = { Text("Без привязки к вахте") })
+                    }
                     if (shiftId == null) shifts.sortedBy { it.id }.forEach { shift ->
                         FilterChip(enabled = !busy, selected = selectedShift == shift.id,
                             onClick = { selectedShift = shift.id }, label = { Text("Вахта №${numbers[shift.id]}") })
                     } else Text("Вахта №${numbers[shiftId] ?: "—"}")
-                    if (shifts.isEmpty()) Text("Сначала создайте вахту")
+                    if (shifts.isEmpty() && current == null) Text("Сначала создайте вахту")
                     if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
                 }
             },
@@ -95,7 +100,8 @@ fun MoneyOperationsPanel(shiftId: Long? = null) {
                 when {
                     minor == null -> error = "Укажите сумму больше нуля, максимум два знака после запятой."
                     !validOperationDate(date) -> error = "Укажите правильную дату ГГГГ-ММ-ДД."
-                    selectedShift == null || shifts.none { it.id == selectedShift } -> error = "Выберите существующую вахту."
+                    (selectedShift == null && !(current != null && current.shiftId == null)) ||
+                        (selectedShift != null && shifts.none { it.id == selectedShift }) -> error = "Выберите существующую вахту."
                     else -> {
                         busy = true; error = ""
                         val operation = MoneyOperationEntity(current?.id ?: 0, selectedShift, date, type, minor, comment.trim())

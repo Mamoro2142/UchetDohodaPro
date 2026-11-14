@@ -261,6 +261,23 @@ class BackupTest {
         } finally { db.close() }
     }
 
+    @Test fun operationOrphanedByShiftDeletionRemainsEditableWithoutAutomaticRebinding() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), WorkDatabase::class.java).build()
+        try {
+            BackupRepository(db).restore(snapshot)
+            val dao = db.workDao()
+            dao.saveMoneyOperation(MoneyOperationEntity(shiftId = 9, date = "2026-10-24", type = ADVANCE, amountMinor = 100))
+            val bound = dao.backupMoneyOperations().single()
+            assertTrue(runCatching { dao.saveMoneyOperation(bound.copy(shiftId = null)) }.isFailure)
+            dao.deleteShiftSafely(9)
+            val orphan = dao.backupMoneyOperations().single()
+            dao.saveMoneyOperation(orphan.copy(amountMinor = 250, comment = "Исправлено"))
+            assertEquals(orphan.copy(amountMinor = 250, comment = "Исправлено"), dao.backupMoneyOperations().single())
+            assertTrue(runCatching { dao.saveMoneyOperation(orphan.copy(id = 0)) }.isFailure)
+            assertEquals(3.085, dao.backupDays().single().calculateIncome(), 0.00000001)
+        } finally { db.close() }
+    }
+
     @Test fun versionTwoBackupRestoresWithoutInventedOperations() {
         val envelope = JSONObject(BackupFormat.encode(snapshot))
         val payload = JSONObject(envelope.getString("payload"))

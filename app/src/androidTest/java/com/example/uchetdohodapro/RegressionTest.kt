@@ -161,6 +161,16 @@ class UpgradeRegressionTest : RegressionBase() {
         runBlocking { assertEquals(3, dao.backupDays().size); assertTrue(dao.backupMoneyOperations().isEmpty()) }
         importBackup(confirm = true)
         verifyRestoredData()
+        // A deleted shift must not force an operation into a different shift.
+        runBlocking { dao.deleteShiftSafely(9) }
+        click("Изменить")
+        compose.onAllNodes(hasSetTextAction())[2].performScrollTo().performTextInput("После удаления вахты")
+        Espresso.closeSoftKeyboard()
+        compose.onNodeWithText("Сохранить").performClick()
+        compose.waitUntil(10000) { runBlocking { dao.backupMoneyOperations().singleOrNull()?.comment == "После удаления вахты" } }
+        runBlocking { assertNull(dao.backupMoneyOperations().single().shiftId) }
+        importBackup(confirm = true)
+        verifyRestoredData()
         shot("05-restored-profile")
     }
 }
