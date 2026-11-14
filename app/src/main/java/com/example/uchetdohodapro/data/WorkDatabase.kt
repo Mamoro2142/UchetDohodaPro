@@ -24,7 +24,8 @@ data class TariffEntity(
     val weightRate: Double = 0.0,
     val volumeRate: Double = 0.0,
     val boxesRate: Double = 0.0,
-    val hoursRate: Double = 0.0
+    val hoursRate: Double = 0.0,
+    val savedAt: Long? = null
 )
 
 @Entity(tableName = "work_days")
@@ -178,7 +179,7 @@ interface WorkDao {
         WorkDayEntity::class,
         ShiftEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class WorkDatabase : RoomDatabase() {
@@ -190,7 +191,7 @@ abstract class WorkDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: WorkDatabase? = null
 
-        private val MIGRATION_1_2 = object : Migration(1, 2) {
+        val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
                     """
@@ -205,7 +206,7 @@ abstract class WorkDatabase : RoomDatabase() {
             }
         }
 
-        private val MIGRATION_2_3 = object : Migration(2, 3) {
+        val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
                     """
@@ -213,6 +214,12 @@ abstract class WorkDatabase : RoomDatabase() {
                     ADD COLUMN `shiftId` INTEGER
                     """.trimIndent()
                 )
+            }
+        }
+
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `tariffs` ADD COLUMN `savedAt` INTEGER")
             }
         }
 
@@ -225,7 +232,8 @@ abstract class WorkDatabase : RoomDatabase() {
                 )
                     .addMigrations(
                         MIGRATION_1_2,
-                        MIGRATION_2_3
+                        MIGRATION_2_3,
+                        MIGRATION_3_4
                     )
                     .build()
                     .also { INSTANCE = it }

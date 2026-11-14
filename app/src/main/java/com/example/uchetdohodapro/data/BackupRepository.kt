@@ -25,7 +25,7 @@ object BackupFormat {
         validate(snapshot)
         val payload = JSONObject().apply {
             put("tariffs", JSONArray().apply { snapshot.tariffs.forEach { t ->
-                put(JSONObject().put("id", t.id).apply {
+                put(JSONObject().put("id", t.id).put("savedAt", t.savedAt ?: JSONObject.NULL).apply {
                     listOf(t.picksRate, t.weightRate, t.volumeRate, t.boxesRate, t.hoursRate)
                         .forEachIndexed { i, v -> put(metrics[i] + "Rate", v) }
                 })
@@ -45,7 +45,7 @@ object BackupFormat {
             } })
         }.toString()
         return JSONObject().put("applicationId", "com.example.uchetdohodapro")
-            .put("formatVersion", 1).put("payload", payload).put("sha256", digest(payload))
+            .put("formatVersion", 2).put("payload", payload).put("sha256", digest(payload))
             .toString().also { require(it.toByteArray(Charsets.UTF_8).size <= MAX_BYTES) { "Слишком большая копия" } }
     }
 
@@ -53,7 +53,8 @@ object BackupFormat {
         require(text.toByteArray(Charsets.UTF_8).size <= MAX_BYTES) { "Слишком большой файл" }
         val envelope = JSONObject(text)
         require(envelope.getString("applicationId") == "com.example.uchetdohodapro") { "Файл другого приложения" }
-        require(envelope.get("formatVersion") == 1) { "Неподдерживаемая версия резервной копии" }
+        val version = envelope.get("formatVersion")
+        require(version == 1 || version == 2) { "Неподдерживаемая версия резервной копии" }
         val payload = envelope.getString("payload")
         require(digest(payload) == envelope.getString("sha256")) { "Нарушена целостность файла" }
         val json = JSONObject(payload)
@@ -74,7 +75,8 @@ object BackupFormat {
         val snapshot = BackupSnapshot(
             objects("tariffs").map { t ->
                 require(t.id("id") == 1L)
-                TariffEntity(1, t.number("picksRate"), t.number("weightRate"), t.number("volumeRate"), t.number("boxesRate"), t.number("hoursRate"))
+                TariffEntity(1, t.number("picksRate"), t.number("weightRate"), t.number("volumeRate"), t.number("boxesRate"), t.number("hoursRate"),
+                    if (version == 1 || t.get("savedAt") == JSONObject.NULL) null else t.id("savedAt"))
             },
             objects("days").map { d -> WorkDayEntity(
                 id = d.id("id"), date = d.getString("date"),
@@ -105,6 +107,7 @@ object BackupFormat {
             val position = ParsePosition(0)
             return parser.parse(value, position)?.takeIf { position.index == value.length }
         }
+        require(snapshot.tariffs.all { it.savedAt == null || it.savedAt > 0 }) { "Неверная дата сохранения тарифов" }
         require(snapshot.tariffs.size <= 1 && snapshot.tariffs.all { it.id == 1 }) { "Неверные тарифы" }
         require(snapshot.days.all { it.id > 0 } && snapshot.days.map { it.id }.distinct().size == snapshot.days.size) { "Повторные ID дней" }
         require(snapshot.shifts.all { it.id > 0 } && snapshot.shifts.map { it.id }.distinct().size == snapshot.shifts.size) { "Повторные ID вахт" }

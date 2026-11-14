@@ -43,6 +43,13 @@ import androidx.room.Room
 import com.example.uchetdohodapro.data.TariffEntity
 import com.example.uchetdohodapro.data.WorkDatabase
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 private val TariffBackground = Color(0xFF111315)
 private val TariffPanel = Color(0xFF1C2023)
@@ -64,7 +71,8 @@ fun TariffsScreen(
     }
 
     val model: TariffViewModel = viewModel(factory = factory)
-    val tariffs by model.tariffs.collectAsState(initial = null)
+    val loadedTariffs by model.tariffs.collectAsState()
+    val tariffs = loadedTariffs?.value
 
     var picks by rememberSaveable { mutableStateOf("") }
     var weight by rememberSaveable { mutableStateOf("") }
@@ -72,9 +80,10 @@ fun TariffsScreen(
     var boxes by rememberSaveable { mutableStateOf("") }
     var hours by rememberSaveable { mutableStateOf("") }
     var initialized by rememberSaveable { mutableStateOf(false) }
-    var message by rememberSaveable { mutableStateOf("") }
+    var validationMessage by rememberSaveable { mutableStateOf("") }
+    val message = validationMessage.ifBlank { model.message }
 
-    LaunchedEffect(tariffs) {
+    LaunchedEffect(loadedTariffs) {
         val saved = tariffs
         if (saved != null && !initialized) {
             picks = saved.picksRate.toEditableRate()
@@ -83,7 +92,7 @@ fun TariffsScreen(
             boxes = saved.boxesRate.toEditableRate()
             hours = saved.hoursRate.toEditableRate()
             initialized = true
-        } else if (saved == null && !initialized) {
+        } else if (loadedTariffs != null && saved == null && !initialized) {
             initialized = true
         }
     }
@@ -138,35 +147,40 @@ Spacer(Modifier.height(18.dp))
             title = "Пики",
             subtitle = "Стоимость за один пик, ₽",
             value = picks,
-            onValueChange = { picks = it }
+            enabled = !model.saving,
+            onValueChange = { picks = it; validationMessage = ""; model.clearMessage() }
         )
 
         TariffInput(
             title = "Вес",
             subtitle = "Стоимость за единицу веса, ₽",
             value = weight,
-            onValueChange = { weight = it }
+            enabled = !model.saving,
+            onValueChange = { weight = it; validationMessage = ""; model.clearMessage() }
         )
 
         TariffInput(
             title = "Объём",
             subtitle = "Стоимость за единицу объёма, ₽",
             value = volume,
-            onValueChange = { volume = it }
+            enabled = !model.saving,
+            onValueChange = { volume = it; validationMessage = ""; model.clearMessage() }
         )
 
         TariffInput(
             title = "Боксы",
             subtitle = "Стоимость за один бокс, ₽",
             value = boxes,
-            onValueChange = { boxes = it }
+            enabled = !model.saving,
+            onValueChange = { boxes = it; validationMessage = ""; model.clearMessage() }
         )
 
         TariffInput(
             title = "Часы",
             subtitle = "Стоимость за один час, ₽",
             value = hours,
-            onValueChange = { hours = it }
+            enabled = !model.saving,
+            onValueChange = { hours = it; validationMessage = ""; model.clearMessage() }
         )
 
         Spacer(Modifier.height(12.dp))
@@ -177,8 +191,9 @@ Spacer(Modifier.height(18.dp))
                     .map { it.trim().replace(',', '.').toDoubleOrNull() }
 
                 if (parsed.any { it == null || !it.isFinite() || it < 0.0 }) {
-                    message = "Введи неотрицательные числа во все поля. Можно использовать запятую."
+                    validationMessage = "Введи неотрицательные числа во все поля. Можно использовать запятую."
                 } else {
+                    validationMessage = ""
                     model.save(
                         TariffEntity(
                             picksRate = parsed[0]!!,
@@ -188,9 +203,9 @@ Spacer(Modifier.height(18.dp))
                             hoursRate = parsed[4]!!
                         )
                     )
-                    message = "Тарифы сохранены"
                 }
             },
+            enabled = initialized && !model.saving,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(56.dp),
@@ -200,8 +215,17 @@ Spacer(Modifier.height(18.dp))
                 contentColor = Color.Black
             )
         ) {
-            Text("Сохранить тарифы", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Text(if (model.saving) "Сохранение…" else "Сохранить тарифы", fontWeight = FontWeight.Bold, fontSize = 16.sp)
         }
+
+        Spacer(Modifier.height(8.dp))
+        Text(
+            tariffs?.savedAt?.let {
+                "Последнее сохранение: " + SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date(it))
+            } ?: "Дата сохранения пока не указана",
+            color = TariffMuted,
+            fontSize = 12.sp
+        )
 
         if (message.isNotBlank()) {
             Spacer(Modifier.height(12.dp))
@@ -222,7 +246,8 @@ private fun TariffInput(
     title: String,
     subtitle: String,
     value: String,
-    onValueChange: (String) -> Unit
+    onValueChange: (String) -> Unit,
+    enabled: Boolean = true
 ) {
     Card(
         modifier = Modifier
@@ -254,6 +279,7 @@ private fun TariffInput(
                 onValueChange = onValueChange,
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
+                enabled = enabled,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 placeholder = { Text("0", color = TariffMuted) },
                 colors = OutlinedTextFieldDefaults.colors(
@@ -277,14 +303,37 @@ private fun Double.toEditableRate(): String {
     }
 }
 
+data class LoadedTariffs(val value: TariffEntity?)
+
 class TariffViewModel(
     private val database: WorkDatabase
 ) : ViewModel() {
     val tariffs = database.workDao().observeTariffs()
+        .map { LoadedTariffs(it) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    var saving by mutableStateOf(false)
+        private set
+    var message by mutableStateOf("")
+        private set
+
+    fun clearMessage() { if (!saving) message = "" }
 
     fun save(tariff: TariffEntity) {
+        if (saving) return
+        saving = true
+        message = ""
         viewModelScope.launch {
-            database.workDao().saveTariffs(tariff)
+            try {
+                database.workDao().saveTariffs(tariff.copy(savedAt = System.currentTimeMillis()))
+                message = "Тарифы сохранены"
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                message = "Не удалось сохранить тарифы. Введённые значения сохранены в форме; попробуйте ещё раз."
+            } finally {
+                saving = false
+            }
         }
     }
 }

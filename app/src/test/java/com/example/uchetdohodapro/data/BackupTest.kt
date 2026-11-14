@@ -28,11 +28,28 @@ class BackupTest {
         assertEquals(3.085, result.days.single().calculateIncome(), 0.00000001)
     }
 
+    @Test fun lastSavedTimestampSurvivesBackup() {
+        val data = snapshot.copy(tariffs = listOf(TariffEntity(savedAt = 1792832400000)))
+        assertEquals(data, BackupFormat.decode(BackupFormat.encode(data)))
+        assertNull(BackupFormat.decode(BackupFormat.encode(snapshot)).tariffs.single().savedAt)
+    }
+
+    @Test fun legacyBackupKeepsUnknownSaveDate() {
+        val envelope = JSONObject(BackupFormat.encode(snapshot))
+        val payload = JSONObject(envelope.getString("payload"))
+        payload.getJSONArray("tariffs").getJSONObject(0).remove("savedAt")
+        val text = payload.toString()
+        val hash = java.security.MessageDigest.getInstance("SHA-256").digest(text.toByteArray())
+            .joinToString("") { "%02x".format(it) }
+        envelope.put("payload", text).put("sha256", hash).put("formatVersion", 1)
+        assertEquals(snapshot, BackupFormat.decode(envelope.toString()))
+    }
+
     @Test fun damagedAndNewerFilesAreRejected() {
         val valid = BackupFormat.encode(snapshot)
         listOf(
             "not json",
-            JSONObject(valid).put("formatVersion", 2).toString(),
+            JSONObject(valid).put("formatVersion", 99).toString(),
             JSONObject(valid).put("sha256", "broken").toString(),
             JSONObject(valid).put("applicationId", "other").toString()
         ).forEach { text -> assertTrue(runCatching { BackupFormat.decode(text) }.isFailure) }
@@ -58,6 +75,42 @@ class BackupTest {
             assertEquals(snapshot, BackupFormat.decode(repository.export()))
             assertTrue(dao.insertWorkDay(WorkDayEntity(date = "2026-11-01")) > 7)
         } finally { db.close() }
+    }
+
+    @Test fun tariffMigrationsPreserveAllOldVersionsAndUnknownSaveDate() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        for (version in 1..3) {
+            val name = "tariff-migration-$version.db"
+            context.deleteDatabase(name)
+            context.openOrCreateDatabase(name, 0, null).use { old ->
+                old.execSQL("CREATE TABLE tariffs (id INTEGER NOT NULL PRIMARY KEY, picksRate REAL NOT NULL, weightRate REAL NOT NULL, volumeRate REAL NOT NULL, boxesRate REAL NOT NULL, hoursRate REAL NOT NULL)")
+                val shiftColumn = if (version >= 3) ", shiftId INTEGER" else ""
+                old.execSQL("CREATE TABLE work_days (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, date TEXT NOT NULL, picks REAL, weight REAL, volume REAL, boxes REAL, hours REAL, picksRate REAL NOT NULL, weightRate REAL NOT NULL, volumeRate REAL NOT NULL, boxesRate REAL NOT NULL, hoursRate REAL NOT NULL$shiftColumn)")
+                old.execSQL("INSERT INTO tariffs VALUES (1, 99, 0, 0, 0, 0)")
+                old.execSQL("INSERT INTO work_days (id, date, picks, picksRate, weightRate, volumeRate, boxesRate, hoursRate) VALUES (7, '2026-10-24', 1.234, 2.5, 0, 0, 0, 0)")
+                if (version >= 2) {
+                    old.execSQL("CREATE TABLE shifts (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, startDate TEXT NOT NULL, endDate TEXT, isActive INTEGER NOT NULL)")
+                    old.execSQL("INSERT INTO shifts VALUES (9, '01.10.2026', NULL, 1)")
+                    if (version >= 3) old.execSQL("UPDATE work_days SET shiftId = 9")
+                }
+                old.version = version
+            }
+            val db = Room.databaseBuilder(context, WorkDatabase::class.java, name)
+                .addMigrations(WorkDatabase.MIGRATION_1_2, WorkDatabase.MIGRATION_2_3, WorkDatabase.MIGRATION_3_4).build()
+            try {
+                val dao = db.workDao()
+                assertNull(dao.backupTariffs().single().savedAt)
+                val day = dao.backupDays().single()
+                assertEquals(3.085, day.calculateIncome(), 0.00000001)
+                assertNull(day.weight)
+                assertEquals(if (version >= 3) 9L else null, day.shiftId)
+                val timestamp = 1792832400000L
+                dao.saveTariffs(TariffEntity(picksRate = 1000.0, savedAt = timestamp))
+                dao.updateWorkDay(day.copy(picks = 2.0))
+                assertEquals(5.0, dao.backupDays().single().calculateIncome(), 0.0)
+                assertEquals(timestamp, dao.backupTariffs().single().savedAt)
+            } finally { db.close(); context.deleteDatabase(name) }
+        }
     }
 
     @Test fun insertionFailureRollsBackAllTables() = runBlocking {
