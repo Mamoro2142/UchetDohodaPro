@@ -113,6 +113,9 @@ class UpgradeRegressionTest : RegressionBase() {
             assertEquals(1.234, dao.getWorkDay(7)!!.picks!!, 0.0)
             dao.insertWorkDay(WorkDayEntity(date = "2026-11-15", picks = 1.0, picksRate = 1.0))
         }
+        // Room commits before its Flow reaches Compose. Wait for the UI count,
+        // then search the LazyColumn rather than racing the invalidation query.
+        waitForText("Рабочих дней: 3")
         compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("2026-11-15"))
         compose.onNodeWithText("2026-11-15").performClick()
         click("Удалить рабочий день")
@@ -163,6 +166,7 @@ class UpgradeRegressionTest : RegressionBase() {
         verifyRestoredData()
         // A deleted shift must not force an operation into a different shift.
         runBlocking { dao.deleteShiftSafely(9) }
+        waitForText("Без привязки к вахте")
         click("Изменить")
         compose.onAllNodes(hasSetTextAction())[2].performScrollTo().performTextInput("После удаления вахты")
         Espresso.closeSoftKeyboard()
