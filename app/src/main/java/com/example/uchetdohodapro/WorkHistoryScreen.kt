@@ -19,6 +19,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.uchetdohodapro.data.ShiftEntity
+import com.example.uchetdohodapro.data.parseNonNegativeNumber
+import com.example.uchetdohodapro.data.editableNumber
 import com.example.uchetdohodapro.data.WorkDatabase
 import com.example.uchetdohodapro.data.WorkDayEntity
 import kotlinx.coroutines.launch
@@ -416,12 +418,8 @@ private fun WorkDayEditScreen(
         mutableStateOf("")
     }
 
-    val income =
-        (picks.toDoubleOrNull() ?: 0.0) * day.picksRate +
-        (weight.toDoubleOrNull() ?: 0.0) * day.weightRate +
-        (volume.toDoubleOrNull() ?: 0.0) * day.volumeRate +
-        (boxes.toDoubleOrNull() ?: 0.0) * day.boxesRate +
-        (hours.toDoubleOrNull() ?: 0.0) * day.hoursRate
+    val income = day.copy(picks = parseNonNegativeNumber(picks), weight = parseNonNegativeNumber(weight),
+        volume = parseNonNegativeNumber(volume), boxes = parseNonNegativeNumber(boxes), hours = parseNonNegativeNumber(hours)).calculateIncome()
 
     Column(
         modifier = Modifier
@@ -558,11 +556,7 @@ private fun WorkDayEditScreen(
                 )
 
                 Text(
-                    String.format(
-                        Locale.getDefault(),
-                        "%.2f ₽",
-                        income
-                    ),
+                    if (income.isFinite()) String.format(Locale.getDefault(), "%.2f ₽", income) else "Проверьте показатели",
                     color = HistoryGreen,
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold
@@ -617,7 +611,7 @@ private fun WorkDayEditScreen(
                 )
 
                 val invalid = inputs.any { value ->
-                    val number = value.toDoubleOrNull()
+                    val number = parseNonNegativeNumber(value)
 
                     value.isNotBlank() &&
                         (
@@ -634,7 +628,7 @@ private fun WorkDayEditScreen(
                             "Укажи правильную дату в формате ГГГГ-ММ-ДД."
                     }
 
-                    invalid -> {
+                    invalid || !income.isFinite() -> {
                         validationError =
                             "Показатели должны быть числами не меньше нуля."
                     }
@@ -779,20 +773,6 @@ private fun HistoryNumberField(
     )
 }
 
-private fun Double?.toInputText(): String {
-    return this?.let {
-        if (it % 1.0 == 0.0) {
-            it.toLong().toString()
-        } else {
-            it.toString()
-        }
-    } ?: ""
-}
+private fun Double?.toInputText(): String = editableNumber(this)
 
-private fun String.toOptionalNumber(): Double? {
-    return if (isBlank()) {
-        null
-    } else {
-        toDoubleOrNull()
-    }
-}
+private fun String.toOptionalNumber(): Double? = parseNonNegativeNumber(this)

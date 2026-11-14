@@ -117,6 +117,50 @@ class BackupTest {
         }
     }
 
+    @Test fun decimalCommaAndPointHaveOneStrictInterpretation() {
+        mapOf("1.5" to 1.5, "1,5" to 1.5, "0,25" to 0.25, "1000.75" to 1000.75, " 1,5 " to 1.5, ".5" to 0.5).forEach { (input, expected) ->
+            assertEquals(expected, parseNonNegativeNumber(input)!!, 0.0)
+        }
+        listOf("", " ", "NaN", "Infinity", "-1", "+1", "1e3", "1.", "1,2.3", "9".repeat(400), "0." + "0".repeat(400) + "1").forEach {
+            assertNull(parseNonNegativeNumber(it))
+        }
+        assertEquals("0.0000001", editableNumber(0.0000001))
+        assertEquals(1.23456789, parseNonNegativeNumber(editableNumber(1.23456789))!!, 0.0)
+    }
+
+    @Test fun commaPreviewEqualsStoredIncomeAndBlankValuesStayNull() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), WorkDatabase::class.java).build()
+        try {
+            val tariff = TariffEntity(picksRate = 2.5, weightRate = 4.0, volumeRate = 1.0, boxesRate = 0.5, hoursRate = 10.0)
+            val draft = dayFromInput("2026-11-14", listOf("1,5", "0,25", "", "0", "2"), tariff)
+            assertEquals(24.75, draft.calculateIncome(), 0.0)
+            val dao = db.workDao()
+            val id = dao.insertWorkDay(draft)
+            assertEquals(draft.copy(id = id), dao.getWorkDay(id))
+            assertNull(dao.getWorkDay(id)!!.volume)
+            assertEquals(0.0, dao.getWorkDay(id)!!.boxes!!, 0.0)
+            dao.saveTariffs(TariffEntity(picksRate = 999.0))
+            assertEquals(draft.calculateIncome(), dao.getWorkDay(id)!!.calculateIncome(), 0.0)
+            val restored = BackupFormat.decode(BackupRepository(db).export())
+            assertNull(restored.days.single().volume)
+            assertEquals(24.75, restored.days.single().calculateIncome(), 0.0)
+        } finally { db.close() }
+    }
+
+    @Test fun daoRejectsInvalidNumbersWithoutChangingSavedData() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), WorkDatabase::class.java).build()
+        try {
+            val repo = BackupRepository(db)
+            repo.restore(snapshot)
+            val before = repo.export()
+            val dao = db.workDao()
+            assertTrue(runCatching { dao.saveTariffs(TariffEntity(picksRate = Double.NaN)) }.isFailure)
+            assertTrue(runCatching { dao.insertWorkDay(WorkDayEntity(date = "2026-11-01", picks = Double.POSITIVE_INFINITY)) }.isFailure)
+            assertTrue(runCatching { dao.updateWorkDay(snapshot.days.single().copy(picks = Double.MAX_VALUE, picksRate = Double.MAX_VALUE)) }.isFailure)
+            assertEquals(before, repo.export())
+        } finally { db.close() }
+    }
+
     @Test fun strictDatesAndUniqueDayCountDoNotRewriteHistory() {
         assertNull(parseStoredDate("31.02.2026"))
         assertNull(parseStoredDate("2026-10-24junk"))

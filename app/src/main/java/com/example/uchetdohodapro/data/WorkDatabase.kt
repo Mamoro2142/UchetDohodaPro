@@ -70,6 +70,34 @@ data class ShiftEntity(
     val isActive: Boolean = true
 )
 
+/** A blank measurement stays null; invalid and non-finite input never becomes a stored zero. */
+fun parseNonNegativeNumber(text: String): Double? {
+    val normalized = text.trim().replace(',', '.')
+    if (!normalized.matches(Regex("([0-9]+([.][0-9]+)?|[.][0-9]+)"))) return null
+    val number = normalized.toDoubleOrNull() ?: return null
+    if (!number.isFinite() || number < 0) return null
+    if (number == 0.0 && BigDecimal(normalized).signum() != 0) return null
+    return number
+}
+
+fun editableNumber(value: Double?): String = value?.let {
+    if (it.isFinite()) BigDecimal.valueOf(it).stripTrailingZeros().toPlainString() else it.toString()
+} ?: ""
+
+fun dayFromInput(date: String, values: List<String>, tariffs: TariffEntity, shiftId: Long? = null): WorkDayEntity {
+    require(values.size == 5)
+    val numbers = values.map { parseNonNegativeNumber(it) }
+    return WorkDayEntity(date = date, picks = numbers[0], weight = numbers[1], volume = numbers[2], boxes = numbers[3], hours = numbers[4],
+        picksRate = tariffs.picksRate, weightRate = tariffs.weightRate, volumeRate = tariffs.volumeRate,
+        boxesRate = tariffs.boxesRate, hoursRate = tariffs.hoursRate, shiftId = shiftId)
+}
+
+private fun validateDayNumbers(day: WorkDayEntity) {
+    val values = listOfNotNull(day.picks, day.weight, day.volume, day.boxes, day.hours) +
+        listOf(day.picksRate, day.weightRate, day.volumeRate, day.boxesRate, day.hoursRate)
+    require(values.all { it.isFinite() && it >= 0 } && day.calculateIncome().isFinite()) { "Проверьте показатели и тарифы: сумма должна быть конечным числом" }
+}
+
 fun parseStoredDate(text: String): LocalDate? = runCatching {
     when {
         text.matches(Regex("[0-9]{4}-[0-9]{2}-[0-9]{2}")) -> LocalDate.parse(text)
@@ -193,7 +221,15 @@ interface WorkDao {
     fun observeTariffs(): Flow<TariffEntity?>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun saveTariffs(tariffs: TariffEntity)
+    suspend fun saveTariffsRaw(tariffs: TariffEntity)
+
+    @Transaction
+    suspend fun saveTariffs(tariffs: TariffEntity) {
+        require(tariffs.id == 1 && listOf(tariffs.picksRate, tariffs.weightRate, tariffs.volumeRate, tariffs.boxesRate, tariffs.hoursRate)
+            .all { it.isFinite() && it >= 0 }) { "Тарифы должны быть конечными числами не меньше нуля" }
+        require(tariffs.savedAt == null || tariffs.savedAt > 0) { "Неверная дата сохранения" }
+        saveTariffsRaw(tariffs)
+    }
 
     @Query("SELECT * FROM work_days ORDER BY date DESC, id DESC")
     fun observeWorkDays(): Flow<List<WorkDayEntity>>
@@ -209,6 +245,7 @@ interface WorkDao {
 
     @Transaction
     suspend fun insertWorkDay(day: WorkDayEntity): Long {
+        validateDayNumbers(day)
         val date = parseStoredDate(day.date) ?: error("Неверная дата рабочего дня")
         require(countDaysForDate(date.toString(), date.format(DateTimeFormatter.ofPattern("dd.MM.uuuu")), 0) == 0) {
             "Рабочий день за эту дату уже существует. Измените его в истории."
@@ -222,6 +259,7 @@ interface WorkDao {
 
     @Transaction
     suspend fun updateWorkDay(day: WorkDayEntity) {
+        validateDayNumbers(day)
         val old = getWorkDay(day.id) ?: error("Рабочий день уже удалён")
         val date = parseStoredDate(day.date) ?: error("Неверная дата рабочего дня")
         if (day.date != old.date) require(countDaysForDate(date.toString(), date.format(DateTimeFormatter.ofPattern("dd.MM.uuuu")), day.id) == 0) {

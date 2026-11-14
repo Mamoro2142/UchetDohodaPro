@@ -40,6 +40,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.room.Room
+import com.example.uchetdohodapro.data.parseNonNegativeNumber
+import com.example.uchetdohodapro.data.editableNumber
 import com.example.uchetdohodapro.data.TariffEntity
 import com.example.uchetdohodapro.data.WorkDatabase
 import kotlinx.coroutines.launch
@@ -188,7 +190,7 @@ Spacer(Modifier.height(18.dp))
         Button(
             onClick = {
                 val parsed = listOf(picks, weight, volume, boxes, hours)
-                    .map { it.trim().replace(',', '.').toDoubleOrNull() }
+                    .map { parseNonNegativeNumber(it) }
 
                 if (parsed.any { it == null || !it.isFinite() || it < 0.0 }) {
                     validationMessage = "Введи неотрицательные числа во все поля. Можно использовать запятую."
@@ -295,13 +297,7 @@ private fun TariffInput(
     }
 }
 
-private fun Double.toEditableRate(): String {
-    return if (this == this.toLong().toDouble()) {
-        this.toLong().toString()
-    } else {
-        toString()
-    }
-}
+private fun Double.toEditableRate(): String = editableNumber(this)
 
 data class LoadedTariffs(val value: TariffEntity?)
 

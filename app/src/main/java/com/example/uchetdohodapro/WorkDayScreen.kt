@@ -15,6 +15,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
+import com.example.uchetdohodapro.data.dayFromInput
+import com.example.uchetdohodapro.data.parseNonNegativeNumber
 import com.example.uchetdohodapro.data.ShiftEntity
 import com.example.uchetdohodapro.data.TariffEntity
 import com.example.uchetdohodapro.data.WorkDayEntity
@@ -113,17 +115,7 @@ fun WorkDayScreen(onBack: () -> Unit = {}) {
 
     val targetShiftId = if (automaticShift) activeShiftId else selectedShiftId
 
-    val income =
-        (picks.toDoubleOrNull() ?: 0.0) *
-            (tariffs?.picksRate ?: 0.0) +
-        (weight.toDoubleOrNull() ?: 0.0) *
-            (tariffs?.weightRate ?: 0.0) +
-        (volume.toDoubleOrNull() ?: 0.0) *
-            (tariffs?.volumeRate ?: 0.0) +
-        (boxes.toDoubleOrNull() ?: 0.0) *
-            (tariffs?.boxesRate ?: 0.0) +
-        (hours.toDoubleOrNull() ?: 0.0) *
-            (tariffs?.hoursRate ?: 0.0)
+    val income = dayFromInput(date, listOf(picks, weight, volume, boxes, hours), tariffs ?: TariffEntity(), targetShiftId).calculateIncome()
 
     Column(
         modifier = Modifier
@@ -283,11 +275,7 @@ fun WorkDayScreen(onBack: () -> Unit = {}) {
                 )
 
                 Text(
-                    String.format(
-                        Locale.getDefault(),
-                        "%.2f ₽",
-                        income
-                    ),
+                    if (income.isFinite()) String.format(Locale.getDefault(), "%.2f ₽", income) else "Проверьте показатели",
                     color = Color(0xFF4CAF50),
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold
@@ -347,7 +335,7 @@ fun WorkDayScreen(onBack: () -> Unit = {}) {
                 )
 
                 val invalid = values.any { value ->
-                    val number = value.toDoubleOrNull()
+                    val number = parseNonNegativeNumber(value)
 
                     value.isNotBlank() &&
                         (
@@ -376,6 +364,11 @@ fun WorkDayScreen(onBack: () -> Unit = {}) {
                     }
 
                     else -> {
+                        val draft = dayFromInput(parsedDate, values, currentTariffs)
+                        if (!draft.calculateIncome().isFinite()) {
+                            error = "Сумма слишком велика. Проверьте показатели и тарифы."
+                            return@Button
+                        }
                         error = ""
                         saving = true
 
@@ -389,37 +382,7 @@ fun WorkDayScreen(onBack: () -> Unit = {}) {
                                 val shiftId =
                                     if (automaticShift) dao.getActiveShift()?.id else selectedShiftId
 
-                                dao.insertWorkDay(
-                                    WorkDayEntity(
-                                        date = parsedDate,
-                                        picks = values[0].takeIf {
-                                            it.isNotBlank()
-                                        }?.toDouble(),
-                                        weight = values[1].takeIf {
-                                            it.isNotBlank()
-                                        }?.toDouble(),
-                                        volume = values[2].takeIf {
-                                            it.isNotBlank()
-                                        }?.toDouble(),
-                                        boxes = values[3].takeIf {
-                                            it.isNotBlank()
-                                        }?.toDouble(),
-                                        hours = values[4].takeIf {
-                                            it.isNotBlank()
-                                        }?.toDouble(),
-                                        picksRate =
-                                            currentTariffs.picksRate,
-                                        weightRate =
-                                            currentTariffs.weightRate,
-                                        volumeRate =
-                                            currentTariffs.volumeRate,
-                                        boxesRate =
-                                            currentTariffs.boxesRate,
-                                        hoursRate =
-                                            currentTariffs.hoursRate,
-                                        shiftId = shiftId
-                                    )
-                                )
+                                dao.insertWorkDay(draft.copy(shiftId = shiftId))
 
                                 savedShiftId = shiftId
                                 saved = true
