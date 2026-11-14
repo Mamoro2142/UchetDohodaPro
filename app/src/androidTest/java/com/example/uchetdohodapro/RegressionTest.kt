@@ -100,8 +100,11 @@ class UpgradeRegressionTest : RegressionBase() {
         click("История рабочих дней")
         compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("2026-10-24"))
         compose.onNodeWithText("2026-10-24").performClick()
+        // Finish the Compose transition before injecting an Android Back event.
+        compose.onNodeWithText("РЕДАКТИРОВАНИЕ ДНЯ").assertIsDisplayed()
+        compose.waitForIdle()
         device.pressBack()
-        compose.onNodeWithText("ИСТОРИЯ РАБОЧИХ ДНЕЙ").assertExists()
+        waitForText("ИСТОРИЯ РАБОЧИХ ДНЕЙ")
         compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("2026-10-24"))
         compose.onNodeWithText("2026-10-24").performClick()
         click("СОХРАНИТЬ ИЗМЕНЕНИЯ")
