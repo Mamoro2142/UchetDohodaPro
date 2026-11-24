@@ -89,6 +89,7 @@ fun ShiftScreen(
 
     fun shiftNumber(shiftId: Long): String = shiftNumbers[shiftId]?.toString() ?: "—"
 
+    var creatingShift by remember { mutableStateOf(false) }
     var editingShift by remember {
         mutableStateOf<ShiftEntity?>(null)
     }
@@ -172,30 +173,7 @@ fun ShiftScreen(
 
             if (activeShift == null) {
                 Button(
-                    onClick = {
-                        if (!busy) {
-                            busy = true
-                            operationError = null
-
-                            scope.launch {
-                                try {
-                                    if (dao.getActiveShift() == null) {
-                                        dao.insertShift(
-                                            ShiftEntity(
-                                                startDate = today(),
-                                                isActive = true
-                                            )
-                                        )
-                                    }
-                                } catch (e: Exception) {
-                                    operationError =
-                                        e.message ?: "Не удалось начать вахту."
-                                } finally {
-                                    busy = false
-                                }
-                            }
-                        }
-                    },
+                    onClick = { creatingShift = true },
                     enabled = !busy,
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -234,6 +212,8 @@ fun ShiftScreen(
                             color = Color(0xFF43D17D),
                             style = MaterialTheme.typography.titleLarge
                         )
+
+                        CompactShiftPlan(activeShift, shiftDaysCount(activeShift.id))
 
                         Button(
                             onClick = {
@@ -357,6 +337,10 @@ fun ShiftScreen(
                             Text("Изменить даты")
                         }
 
+                        key(shift.id) {
+                            ShiftPauseControls(shift, enabled = !busy)
+                        }
+
                         OutlinedButton(
                             onClick = {
                                 deletingShift = shift
@@ -410,6 +394,13 @@ fun ShiftScreen(
         }
     }
     
+    if (creatingShift) {
+        ShiftPlanDialog(title = "Начать вахту", initial = null, onDismiss = { creatingShift = false },
+            onSave = { plan ->
+                dao.insertShift(ShiftEntity(startDate = today(), plannedWorkDays = plan))
+            })
+    }
+
     if (deletingShift != null) {
         val shift = deletingShift!!
 
@@ -542,8 +533,6 @@ fun ShiftScreen(
                         singleLine = true,
                         enabled = !busy
                     )
-
-                    editingShift?.let { ShiftPauseControls(it) }
 
                     if (errorMessage != null) {
                         Text(

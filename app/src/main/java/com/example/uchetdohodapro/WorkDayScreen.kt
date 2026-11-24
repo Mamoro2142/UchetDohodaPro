@@ -27,7 +27,7 @@ import java.util.Date
 import java.util.Locale
 
 @Composable
-fun WorkDayScreen(onBack: () -> Unit = {}) {
+fun WorkDayScreen(onBack: () -> Unit = {}, initialDate: String? = null, initialShiftId: Long? = null) {
     val context = LocalContext.current
 
     val dao = remember(context) {
@@ -38,7 +38,7 @@ fun WorkDayScreen(onBack: () -> Unit = {}) {
 
     var date by remember {
         mutableStateOf(
-            SimpleDateFormat(
+            initialDate ?: SimpleDateFormat(
                 "yyyy-MM-dd",
                 Locale.getDefault()
             ).format(Date())
@@ -60,8 +60,8 @@ fun WorkDayScreen(onBack: () -> Unit = {}) {
     }
 
     var availableShifts by remember { mutableStateOf<List<ShiftEntity>>(emptyList()) }
-    var automaticShift by remember { mutableStateOf(true) }
-    var selectedShiftId by remember { mutableStateOf<Long?>(null) }
+    var automaticShift by remember { mutableStateOf(initialShiftId == null) }
+    var selectedShiftId by remember { mutableStateOf<Long?>(initialShiftId) }
     var showShiftPicker by remember { mutableStateOf(false) }
 
     // Порядковые номера вахт.

@@ -1,7 +1,9 @@
 
 package com.example.uchetdohodapro
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -40,6 +42,49 @@ fun ShiftDetailsScreen(
     val shiftOperations = operations.filter { it.shiftId == shift.id }
     val advances = financeTotal(shiftOperations, ADVANCE)
     val fines = financeTotal(shiftOperations, FINE)
+
+    var selectedCalendarDate by remember(shift.id) {
+        mutableStateOf(if (shift.isActive) LocalDate.now() else shift.endDate?.let(::parseStoredDate)
+            ?: parseStoredDate(shift.startDate) ?: LocalDate.now())
+    }
+    var addDate by remember(shift.id) { mutableStateOf<LocalDate?>(null) }
+    var editDay by remember(shift.id) { mutableStateOf<WorkDayEntity?>(null) }
+    var saving by remember { mutableStateOf(false) }
+    var deleteConfirm by remember { mutableStateOf(false) }
+    var editError by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    val shifts by remember(dao) { dao.observeShifts() }.collectAsState(emptyList())
+    val shiftNumbers = shifts.sortedBy { it.id }.mapIndexed { i, s -> s.id to i + 1 }.toMap()
+    BackHandler(enabled = addDate != null || editDay != null) {
+        if (!saving) { addDate = null; editDay = null; editError = "" }
+    }
+    addDate?.let { date ->
+        WorkDayScreen(onBack = { addDate = null }, initialDate = date.toString(), initialShiftId = shift.id)
+        return
+    }
+    editDay?.let { day ->
+        WorkDayEditScreen(day, shifts, shiftNumbers, saving,
+            onBack = { if (!saving) { editDay = null; editError = "" } },
+            onSave = { updated ->
+                if (!saving) { saving = true; scope.launch {
+                    try { dao.updateWorkDay(updated); editDay = null; editError = "" }
+                    catch (e: Exception) { editError = e.message ?: "Не удалось сохранить" }
+                    finally { saving = false }
+                } }
+            }, onDelete = { deleteConfirm = true }, error = editError)
+        if (deleteConfirm) AlertDialog(onDismissRequest = { deleteConfirm = false },
+            title = { Text("Удалить рабочий день?") },
+            text = { Text(day.date) },
+            confirmButton = { TextButton(enabled = !saving, onClick = {
+                deleteConfirm = false; saving = true; scope.launch {
+                    try { dao.deleteWorkDay(day.id); editDay = null; editError = "" }
+                    catch (e: Exception) { editError = e.message ?: "Не удалось удалить" }
+                    finally { saving = false }
+                }
+            }) { Text("Удалить") } },
+            dismissButton = { TextButton(onClick = { deleteConfirm = false }) { Text("Отмена") } })
+        return
+    }
 
     val sortedDays = days.sortedWith(compareByDescending { parseStoredDate(it.date) ?: LocalDate.MIN })
 
@@ -148,6 +193,8 @@ fun ShiftDetailsScreen(
         HorizontalDivider()
 
         Text("Остаток к получению: ${money(totalIncome - advances - fines)}", style = MaterialTheme.typography.titleMedium)
+        ShiftMonthCalendar(shift, days, selected = selectedCalendarDate, onSelect = { selectedCalendarDate = it },
+            onEdit = { editDay = it; editError = "" }, onAdd = { addDate = it })
         ShiftCalendarSummary(shift, days, advances)
         MoneyOperationsPanel(shift.id)
         HorizontalDivider()

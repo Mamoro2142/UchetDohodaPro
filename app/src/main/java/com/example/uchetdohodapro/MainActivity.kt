@@ -413,6 +413,10 @@ private fun HomeScreen(
         }
 
         Spacer(Modifier.height(14.dp))
+        if (activeShift?.plannedWorkDays != null) {
+            ShiftProgressCard(activeShift, currentDays)
+            Spacer(Modifier.height(14.dp))
+        }
 
         Row(
             modifier = Modifier

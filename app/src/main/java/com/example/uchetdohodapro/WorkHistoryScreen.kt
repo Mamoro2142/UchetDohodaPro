@@ -381,7 +381,7 @@ private fun WorkHistoryCard(
 }
 
 @Composable
-private fun WorkDayEditScreen(
+internal fun WorkDayEditScreen(
     day: WorkDayEntity,
     shifts: List<ShiftEntity>,
     shiftNumbers: Map<Long, Int>,

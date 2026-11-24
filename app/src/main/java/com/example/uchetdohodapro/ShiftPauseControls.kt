@@ -1,6 +1,7 @@
 package com.example.uchetdohodapro
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -16,7 +17,7 @@ import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.launch
 
 @Composable
-fun ShiftPauseControls(shift: ShiftEntity) {
+fun ShiftPauseControls(shift: ShiftEntity, enabled: Boolean = true) {
     val context = LocalContext.current
     val dao = remember(context) { WorkDatabase.getInstance(context).workDao() }
     val all by remember(dao) { dao.observePauses() }.collectAsState(emptyList())
@@ -27,8 +28,15 @@ fun ShiftPauseControls(shift: ShiftEntity) {
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     if (shift.isActive) {
-        OutlinedButton(onClick = { date = LocalDate.now().format(DateTimeFormatter.ofPattern("dd.MM.uuuu")); error = null; dialog = true }, enabled = !busy) {
-            Text(if (paused) "Продолжить вахту" else "Пауза вахты")
+        val actionColor = if (paused) Color(0xFF55BD83) else Color(0xFFFF8A24)
+        OutlinedButton(
+            onClick = { date = LocalDate.now().format(DateTimeFormatter.ofPattern("dd.MM.uuuu")); error = null; dialog = true },
+            enabled = enabled && !busy,
+            modifier = Modifier.fillMaxWidth(),
+            border = BorderStroke(1.dp, if (enabled && !busy) actionColor else MaterialTheme.colorScheme.outline),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = actionColor)
+        ) {
+            Text(if (paused) "▶  Продолжить вахту" else "Ⅱ  Пауза вахты")
         }
     }
     if (dialog) AlertDialog(onDismissRequest = { if (!busy) dialog = false }, title = { Text(if (paused) "Дата продолжения" else "Начало паузы") }, text = {
@@ -66,7 +74,7 @@ fun ShiftCalendarSummary(shift: ShiftEntity, days: List<WorkDayEntity>, advances
         pauses.zip(pauseLabels).map { (p, label) -> Triple(LocalDate.parse(p.startDate), label, "Пауза вахты") }).sortedBy { it.first }
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Календарь вахты", style = MaterialTheme.typography.titleMedium)
+            Text("Хронология вахты", style = MaterialTheme.typography.titleMedium)
             HorizontalDivider()
             entries.forEach { (_, label, status) ->
                 if (status == "Пауза вахты") HorizontalDivider()
