@@ -100,7 +100,7 @@ class BackupTest {
                 old.version = version
             }
             val db = Room.databaseBuilder(context, WorkDatabase::class.java, name)
-                .addMigrations(WorkDatabase.MIGRATION_1_2, WorkDatabase.MIGRATION_2_3, WorkDatabase.MIGRATION_3_4, WorkDatabase.MIGRATION_4_5).build()
+                .addMigrations(WorkDatabase.MIGRATION_1_2, WorkDatabase.MIGRATION_2_3, WorkDatabase.MIGRATION_3_4, WorkDatabase.MIGRATION_4_5, WorkDatabase.MIGRATION_5_6).build()
             try {
                 val dao = db.workDao()
                 assertNull(dao.backupTariffs().single().savedAt)
@@ -298,6 +298,27 @@ class BackupTest {
             db.openHelper.writableDatabase.execSQL("CREATE TRIGGER fail_restore BEFORE INSERT ON work_days BEGIN SELECT RAISE(ABORT, 'test failure'); END")
             assertTrue(runCatching { repository.restore(snapshot.copy(tariffs = emptyList())) }.isFailure)
             assertEquals(before, repository.export())
+        } finally { db.close() }
+    }
+    @Test fun pausesSurviveBackupAndClosingShift() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), WorkDatabase::class.java).build()
+        try {
+            val dao = db.workDao()
+            val start = java.time.LocalDate.now().minusDays(12)
+            val id = dao.insertShift(ShiftEntity(startDate = start.toString(), isActive = true))
+            dao.togglePause(id, start.plusDays(2))
+            assertTrue(runCatching { dao.insertWorkDay(WorkDayEntity(date = start.plusDays(3).toString(), shiftId = id)) }.isFailure)
+            dao.togglePause(id, start.plusDays(5))
+            dao.insertWorkDay(WorkDayEntity(date = start.plusDays(5).toString(), shiftId = id))
+            dao.togglePause(id, start.plusDays(7))
+            dao.updateShift(dao.getShift(id)!!.copy(isActive = false, endDate = start.plusDays(9).toString()))
+            val pauses = dao.backupPauses().sortedBy { it.startDate }
+            assertEquals(2, pauses.size)
+            assertEquals(start.plusDays(10).toString(), pauses.last().resumeDate)
+            val repo = BackupRepository(db)
+            val saved = BackupFormat.decode(repo.export())
+            repo.restore(saved)
+            assertEquals(saved, BackupFormat.decode(repo.export()))
         } finally { db.close() }
     }
 }
