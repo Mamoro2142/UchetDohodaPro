@@ -100,7 +100,7 @@ class BackupTest {
                 old.version = version
             }
             val db = Room.databaseBuilder(context, WorkDatabase::class.java, name)
-                .addMigrations(WorkDatabase.MIGRATION_1_2, WorkDatabase.MIGRATION_2_3, WorkDatabase.MIGRATION_3_4, WorkDatabase.MIGRATION_4_5, WorkDatabase.MIGRATION_5_6).build()
+                .addMigrations(WorkDatabase.MIGRATION_1_2, WorkDatabase.MIGRATION_2_3, WorkDatabase.MIGRATION_3_4, WorkDatabase.MIGRATION_4_5, WorkDatabase.MIGRATION_5_6, WorkDatabase.MIGRATION_6_7).build()
             try {
                 val dao = db.workDao()
                 assertNull(dao.backupTariffs().single().savedAt)
@@ -108,6 +108,7 @@ class BackupTest {
                 assertEquals(3.085, day.calculateIncome(), 0.00000001)
                 assertNull(day.weight)
                 assertEquals(if (version >= 3) 9L else null, day.shiftId)
+                assertTrue(dao.backupShifts().all { it.plannedWorkDays == null })
                 val timestamp = 1792832400000L
                 dao.saveTariffs(TariffEntity(picksRate = 1000.0, savedAt = timestamp))
                 dao.updateWorkDay(day.copy(picks = 2.0))
@@ -320,5 +321,82 @@ class BackupTest {
             repo.restore(saved)
             assertEquals(saved, BackupFormat.decode(repo.export()))
         } finally { db.close() }
+    }
+    @Test fun historicalPauseAndTomorrowResume() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), WorkDatabase::class.java).build()
+        try {
+            val dao = db.workDao()
+            val today = java.time.LocalDate.now()
+            val id = dao.insertShift(ShiftEntity(startDate = today.minusDays(5).toString(), isActive = true))
+            dao.insertWorkDay(WorkDayEntity(date = today.minusDays(2).toString(), shiftId = id))
+            dao.togglePause(id, today.minusDays(3))
+            assertEquals(today.minusDays(2).toString(), dao.backupPauses().single().resumeDate)
+            dao.togglePause(id, today)
+            dao.togglePause(id, today.plusDays(1))
+            assertEquals(today.plusDays(1).toString(), dao.backupPauses().maxByOrNull { it.startDate }!!.resumeDate)
+        } finally { db.close() }
+    }
+    @Test fun planAndPausesSurviveOldAndNewBackupFormats() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), WorkDatabase::class.java).build()
+        try {
+            val dao = db.workDao()
+            val start = java.time.LocalDate.now().minusDays(10)
+            val id = dao.insertShift(ShiftEntity(startDate = start.toString(), plannedWorkDays = 15))
+            dao.insertWorkDay(WorkDayEntity(date = start.toString(), shiftId = id, picks = 2.0, picksRate = 5.0))
+            dao.togglePause(id, start.plusDays(1))
+            dao.togglePause(id, start.plusDays(3))
+            dao.setShiftPlan(id, 20)
+            assertEquals(20, dao.getShift(id)!!.plannedWorkDays)
+            assertTrue(runCatching { dao.setShiftPlan(id, 0) }.isFailure)
+            val repo = BackupRepository(db)
+            val encoded = repo.export()
+            val restored = BackupFormat.decode(encoded)
+            assertEquals(20, restored.shifts.single().plannedWorkDays)
+            assertEquals(1, restored.pauses.size)
+            dao.setShiftPlan(id, null)
+            assertNull(dao.getShift(id)!!.plannedWorkDays)
+            repo.restore(restored)
+            assertEquals(restored, BackupFormat.decode(repo.export()))
+            val old = JSONObject(encoded)
+            val payload = JSONObject(old.getString("payload"))
+            payload.getJSONArray("shifts").getJSONObject(0).remove("plannedWorkDays")
+            val body = payload.toString()
+            val hash = java.security.MessageDigest.getInstance("SHA-256").digest(body.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+            old.put("payload", body).put("sha256", hash).put("formatVersion", 4)
+            val legacy = BackupFormat.decode(old.toString())
+            assertNull(legacy.shifts.single().plannedWorkDays)
+            assertEquals(restored.pauses, legacy.pauses)
+            assertEquals(restored.days, legacy.days)
+        } finally { db.close() }
+    }
+
+    @Test fun migrateVersion6PreservesPausesOperationsAndDays() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val name = "plan-migration-6.db"
+        context.deleteDatabase(name)
+        context.openOrCreateDatabase(name, 0, null).use { old ->
+            old.execSQL("CREATE TABLE tariffs (id INTEGER NOT NULL PRIMARY KEY, picksRate REAL NOT NULL, weightRate REAL NOT NULL, volumeRate REAL NOT NULL, boxesRate REAL NOT NULL, hoursRate REAL NOT NULL, savedAt INTEGER)")
+            old.execSQL("CREATE TABLE work_days (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, date TEXT NOT NULL, picks REAL, weight REAL, volume REAL, boxes REAL, hours REAL, picksRate REAL NOT NULL, weightRate REAL NOT NULL, volumeRate REAL NOT NULL, boxesRate REAL NOT NULL, hoursRate REAL NOT NULL, shiftId INTEGER)")
+            old.execSQL("CREATE TABLE shifts (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, startDate TEXT NOT NULL, endDate TEXT, isActive INTEGER NOT NULL)")
+            old.execSQL("CREATE TABLE money_operations (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, shiftId INTEGER, date TEXT NOT NULL, type TEXT NOT NULL, amountMinor INTEGER NOT NULL, comment TEXT NOT NULL, FOREIGN KEY(shiftId) REFERENCES shifts(id) ON UPDATE NO ACTION ON DELETE SET NULL)")
+            old.execSQL("CREATE INDEX index_money_operations_shiftId ON money_operations(shiftId)")
+            old.execSQL("CREATE TABLE shift_pauses (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, shiftId INTEGER NOT NULL, startDate TEXT NOT NULL, resumeDate TEXT, FOREIGN KEY(shiftId) REFERENCES shifts(id) ON UPDATE NO ACTION ON DELETE CASCADE)")
+            old.execSQL("CREATE INDEX index_shift_pauses_shiftId ON shift_pauses(shiftId)")
+            old.execSQL("INSERT INTO shifts VALUES (9, '2026-10-01', NULL, 1)")
+            old.execSQL("INSERT INTO work_days (id,date,picks,picksRate,weightRate,volumeRate,boxesRate,hoursRate,shiftId) VALUES (7,'2026-10-24',2,5,0,0,0,0,9)")
+            old.execSQL("INSERT INTO money_operations VALUES (1,9,'2026-10-24','advance',1000,'')")
+            old.execSQL("INSERT INTO shift_pauses VALUES (1,9,'2026-10-25','2026-10-27')")
+            old.version = 6
+        }
+        val db = Room.databaseBuilder(context, WorkDatabase::class.java, name).addMigrations(WorkDatabase.MIGRATION_6_7).build()
+        try {
+            val dao = db.workDao()
+            assertNull(dao.getShift(9)!!.plannedWorkDays)
+            assertEquals(10.0, dao.getWorkDay(7)!!.calculateIncome(), 0.0)
+            assertEquals(1000L, dao.backupMoneyOperations().single().amountMinor)
+            assertEquals("2026-10-27", dao.backupPauses().single().resumeDate)
+            dao.setShiftPlan(9, 15)
+            assertEquals(15, dao.getShift(9)!!.plannedWorkDays)
+        } finally { db.close(); context.deleteDatabase(name) }
     }
 }
