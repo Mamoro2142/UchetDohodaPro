@@ -346,16 +346,19 @@ interface WorkDao {
     @Transaction
     suspend fun togglePause(shiftId: Long, date: LocalDate) {
         val shift = getShift(shiftId) ?: error("Вахта не найдена")
-        require(shift.isActive && date >= parseStoredDate(shift.startDate)!! && date <= LocalDate.now()) { "Дата вне активной вахты" }
+        require(shift.isActive && date >= parseStoredDate(shift.startDate)!!) { "Дата вне активной вахты" }
         val pauses = backupPauses().filter { it.shiftId == shiftId }
         val open = pauses.singleOrNull { it.resumeDate == null }
         if (open != null) {
             require(date > LocalDate.parse(open.startDate)) { "Дата продолжения должна быть позже начала паузы" }
             updatePause(open.copy(resumeDate = date.toString()))
         } else {
+            require(date <= LocalDate.now()) { "Начало паузы не может быть в будущем" }
             require(pauses.all { it.resumeDate != null && date >= LocalDate.parse(it.resumeDate) }) { "Дата пересекает предыдущую паузу" }
-            require(backupDays().none { it.shiftId == shiftId && parseStoredDate(it.date)!! >= date }) { "В периоде уже есть рабочие дни" }
-            insertPause(ShiftPauseEntity(shiftId = shiftId, startDate = date.toString()))
+            val nextWork = backupDays().filter { it.shiftId == shiftId }
+                .mapNotNull { parseStoredDate(it.date) }.filter { it >= date }.minOrNull()
+            require(nextWork != date) { "На эту дату уже сохранена рабочая смена" }
+            insertPause(ShiftPauseEntity(shiftId = shiftId, startDate = date.toString(), resumeDate = nextWork?.toString()))
         }
     }
 
