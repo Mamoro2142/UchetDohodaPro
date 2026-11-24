@@ -1,6 +1,10 @@
 package com.example.uchetdohodapro
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import android.widget.Toast
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
@@ -28,7 +32,7 @@ fun ShiftPauseControls(shift: ShiftEntity) {
         }
     }
     if (dialog) AlertDialog(onDismissRequest = { if (!busy) dialog = false }, title = { Text(if (paused) "Дата продолжения" else "Начало паузы") }, text = {
-        Column { OutlinedTextField(date, { date = it; error = null }, label = { Text("дд.ММ.гггг") }, singleLine = true, enabled = !busy); error?.let { Text(it, color = MaterialTheme.colorScheme.error) } }
+        Column { if (!paused) Text("Если после выбранной даты уже есть смена, историческая пауза закончится перед ней."); OutlinedTextField(date, { date = it; error = null }, label = { Text("дд.ММ.гггг") }, singleLine = true, enabled = !busy); error?.let { Text(it, color = MaterialTheme.colorScheme.error) } }
     }, confirmButton = { TextButton(enabled = !busy, onClick = {
         val parsed = parseStoredDate(date)
         if (parsed == null) error = "Неверная дата" else {
@@ -48,9 +52,41 @@ fun ShiftCalendarSummary(shift: ShiftEntity, days: List<WorkDayEntity>, advances
     val fmt = DateTimeFormatter.ofPattern("dd.MM.uuuu")
     val weekends = remember(work, pauses) { work.zipWithNext().flatMap { (a,b) -> generateSequence(a.plusDays(1)) { it.plusDays(1) }.takeWhile { it < b }.filter { d -> pauses.none { it.contains(d) } }.toList() } }
     val pauseLabels = pauses.map { p -> LocalDate.parse(p.startDate).format(fmt) + " — " + (p.resumeDate?.let { LocalDate.parse(it).minusDays(1).format(fmt) } ?: "по настоящее время") }
-    Text("Выходных: ${weekends.size}")
-    weekends.forEach { Text("${it.format(fmt)} — выходной") }
-    pauseLabels.forEach { Text("Пауза: $it") }
+    val today = LocalDate.now()
+    val pauseDays = pauses.sumOf { p ->
+        val start = LocalDate.parse(p.startDate)
+        val end = minOf(p.resumeDate?.let { LocalDate.parse(it) } ?: today.plusDays(1), today.plusDays(1))
+        java.time.temporal.ChronoUnit.DAYS.between(start, end).coerceAtLeast(0)
+    }
+    val green = Color(0xFF68C98B)
+    val yellow = Color(0xFFFACC15)
+    val orange = Color(0xFFF28C28)
+    val entries = (work.map { Triple(it, it.format(fmt), "Рабочая смена") } +
+        weekends.map { Triple(it, it.format(fmt), "Выходной") } +
+        pauses.zip(pauseLabels).map { (p, label) -> Triple(LocalDate.parse(p.startDate), label, "Пауза вахты") }).sortedBy { it.first }
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Календарь вахты", style = MaterialTheme.typography.titleMedium)
+            HorizontalDivider()
+            entries.forEach { (_, label, status) ->
+                if (status == "Пауза вахты") HorizontalDivider()
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(label, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(status, color = when(status) { "Рабочая смена" -> green; "Выходной" -> yellow; else -> orange })
+                }
+                if (status == "Пауза вахты") HorizontalDivider()
+            }
+            HorizontalDivider()
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                listOf(Triple(work.size.toString(), "Смены", green), Triple(weekends.size.toString(), "Выходные", yellow), Triple(pauseDays.toString(), "Дни паузы", orange)).forEach { (count, label, color) ->
+                    Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+                        Text(count, color = color, style = MaterialTheme.typography.headlineSmall)
+                        Text(label, style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+        }
+    }
     val clipboard = LocalClipboardManager.current
     if (!shift.isActive) OutlinedButton(onClick = {
         clipboard.setText(AnnotatedString(buildString {
@@ -64,5 +100,6 @@ fun ShiftCalendarSummary(shift: ShiftEntity, days: List<WorkDayEntity>, advances
             appendLine("ИНН:")
             append("Номер:")
         }))
+        Toast.makeText(context, "Заявление на расчёт скопировано", Toast.LENGTH_SHORT).show()
     }) { Text("Прошу поставить на расчёт") }
 }
