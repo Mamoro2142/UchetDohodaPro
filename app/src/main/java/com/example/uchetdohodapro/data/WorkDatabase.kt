@@ -67,7 +67,8 @@ data class ShiftEntity(
     val id: Long = 0,
     val startDate: String,
     val endDate: String? = null,
-    val isActive: Boolean = true
+    val isActive: Boolean = true,
+    val plannedWorkDays: Int? = null
 )
 
 @Entity(tableName = "shift_pauses", foreignKeys = [ForeignKey(entity = ShiftEntity::class, parentColumns = ["id"], childColumns = ["shiftId"], onDelete = ForeignKey.CASCADE)], indices = [Index("shiftId")])
@@ -122,6 +123,7 @@ fun dayBelongsToShift(date: String, shift: ShiftEntity): Boolean {
 fun uniqueWorkDayCount(days: List<WorkDayEntity>): Int = days.map { parseStoredDate(it.date)?.toString() ?: it.date }.distinct().size
 
 private fun validateShiftDates(shift: ShiftEntity) {
+    require(shift.plannedWorkDays == null || shift.plannedWorkDays > 0) { "Укажите положительное количество рабочих дней" }
     val start = parseStoredDate(shift.startDate)
     val end = shift.endDate?.let { parseStoredDate(it) }
     require(start != null && (shift.endDate == null || end != null)) { "Укажите правильные даты вахты" }
@@ -363,6 +365,13 @@ interface WorkDao {
     }
 
     @Transaction
+    suspend fun setShiftPlan(shiftId: Long, planned: Int?) {
+        require(planned == null || planned > 0) { "Укажите положительное количество рабочих дней" }
+        val shift = getShift(shiftId) ?: error("Вахта уже удалена")
+        check(updateShiftRaw(shift.copy(plannedWorkDays = planned)) == 1)
+    }
+
+    @Transaction
     suspend fun insertShift(shift: ShiftEntity): Long {
         validateShiftDates(shift)
         require(!shift.isActive || countOtherActiveShifts(0) == 0) { "Уже существует активная вахта" }
@@ -427,7 +436,7 @@ interface WorkDao {
         MoneyOperationEntity::class,
         ShiftPauseEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 abstract class WorkDatabase : RoomDatabase() {
@@ -490,6 +499,12 @@ abstract class WorkDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `shifts` ADD COLUMN `plannedWorkDays` INTEGER")
+            }
+        }
+
         fun getInstance(context: Context): WorkDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -501,7 +516,7 @@ abstract class WorkDatabase : RoomDatabase() {
                         MIGRATION_1_2,
                         MIGRATION_2_3,
                         MIGRATION_3_4,
-                        MIGRATION_4_5, MIGRATION_5_6
+                        MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7
                     )
                     .build()
                     .also { INSTANCE = it }
