@@ -13,7 +13,8 @@ data class BackupSnapshot(
     val tariffs: List<TariffEntity>,
     val days: List<WorkDayEntity>,
     val shifts: List<ShiftEntity>,
-    val operations: List<MoneyOperationEntity> = emptyList()
+    val operations: List<MoneyOperationEntity> = emptyList(),
+    val pauses: List<ShiftPauseEntity> = emptyList()
 )
 
 object BackupFormat {
@@ -44,13 +45,14 @@ object BackupFormat {
                 put(JSONObject().put("id", o.id).put("shiftId", o.shiftId ?: JSONObject.NULL)
                     .put("date", o.date).put("type", o.type).put("amountMinor", o.amountMinor).put("comment", o.comment))
             } })
+            put("pauses", JSONArray().apply { snapshot.pauses.forEach { p -> put(JSONObject().put("id", p.id).put("shiftId", p.shiftId).put("startDate", p.startDate).put("resumeDate", p.resumeDate ?: JSONObject.NULL)) } })
             put("shifts", JSONArray().apply { snapshot.shifts.forEach { s ->
                 put(JSONObject().put("id", s.id).put("startDate", s.startDate)
                     .put("endDate", s.endDate ?: JSONObject.NULL).put("isActive", s.isActive))
             } })
         }.toString()
         return JSONObject().put("applicationId", "com.example.uchetdohodapro")
-            .put("formatVersion", 3).put("payload", payload).put("sha256", digest(payload))
+            .put("formatVersion", 4).put("payload", payload).put("sha256", digest(payload))
             .toString().also { require(it.toByteArray(Charsets.UTF_8).size <= MAX_BYTES) { "Слишком большая копия" } }
     }
 
@@ -59,7 +61,7 @@ object BackupFormat {
         val envelope = JSONObject(text)
         require(envelope.getString("applicationId") == "com.example.uchetdohodapro") { "Файл другого приложения" }
         val version = envelope.get("formatVersion")
-        require(version == 1 || version == 2 || version == 3) { "Неподдерживаемая версия резервной копии" }
+        require(version == 1 || version == 2 || version == 3 || version == 4) { "Неподдерживаемая версия резервной копии" }
         val payload = envelope.getString("payload")
         require(digest(payload) == envelope.getString("sha256")) { "Нарушена целостность файла" }
         val json = JSONObject(payload)
@@ -96,10 +98,11 @@ object BackupFormat {
                 ShiftEntity(s.id("id"), s.getString("startDate"),
                     if (s.get("endDate") == JSONObject.NULL) null else s.getString("endDate"), s.getBoolean("isActive"))
             },
-            if (version != 3) emptyList() else objects("operations").map { o ->
+            if (version == 1 || version == 2) emptyList() else objects("operations").map { o ->
                 MoneyOperationEntity(o.id("id"), if (o.get("shiftId") == JSONObject.NULL) null else o.id("shiftId"),
                     o.getString("date"), o.getString("type"), o.id("amountMinor"), o.getString("comment"))
-            }
+            },
+            if (version == 4) objects("pauses").map { p -> ShiftPauseEntity(p.id("id"), p.id("shiftId"), p.getString("startDate"), if (p.isNull("resumeDate")) null else p.getString("resumeDate")) } else emptyList()
         )
         validate(snapshot)
         return snapshot
@@ -130,6 +133,20 @@ object BackupFormat {
             parseDate(it.startDate) != null && (it.endDate == null ||
                 (parseDate(it.endDate) != null && !parseDate(it.endDate)!!.before(parseDate(it.startDate))))
         }) { "Некорректная дата" }
+        require(snapshot.pauses.map { it.id }.distinct().size == snapshot.pauses.size)
+        snapshot.pauses.groupBy { it.shiftId }.forEach { (id, pauses) ->
+            val shift = snapshot.shifts.single { it.id == id }
+            var previous: ShiftPauseEntity? = null
+            pauses.sortedBy { it.startDate }.forEach { p ->
+                val start = java.time.LocalDate.parse(p.startDate)
+                val resume = p.resumeDate?.let { java.time.LocalDate.parse(it) }
+                require(p.id > 0 && start >= parseStoredDate(shift.startDate)!! && (resume == null || resume > start))
+                require(shift.isActive || (resume != null && resume.minusDays(1) <= parseStoredDate(shift.endDate!!)!!))
+                previous?.let { require(it.resumeDate != null && start >= java.time.LocalDate.parse(it.resumeDate)) }
+                require(snapshot.days.none { it.shiftId == id && p.contains(parseStoredDate(it.date)!!) })
+                previous = p
+            }
+        }
         val numbers = snapshot.tariffs.flatMap { listOf(it.picksRate, it.weightRate, it.volumeRate, it.boxesRate, it.hoursRate) } +
             snapshot.days.flatMap { listOfNotNull(it.picks, it.weight, it.volume, it.boxes, it.hours) +
                 listOf(it.picksRate, it.weightRate, it.volumeRate, it.boxesRate, it.hoursRate, it.calculateIncome()) }
@@ -140,7 +157,7 @@ object BackupFormat {
 class BackupRepository(private val db: WorkDatabase) {
     suspend fun export(): String = db.withTransaction {
         val dao = db.workDao()
-        BackupFormat.encode(BackupSnapshot(dao.backupTariffs(), dao.backupDays(), dao.backupShifts(), dao.backupMoneyOperations()))
+        BackupFormat.encode(BackupSnapshot(dao.backupTariffs(), dao.backupDays(), dao.backupShifts(), dao.backupMoneyOperations(), dao.backupPauses()))
     }
 
     suspend fun restore(snapshot: BackupSnapshot) {
@@ -156,6 +173,7 @@ class BackupRepository(private val db: WorkDatabase) {
             snapshot.tariffs.forEach { dao.saveTariffs(it) }
             dao.restoreDays(snapshot.days)
             dao.restoreMoneyOperations(snapshot.operations)
+            dao.restorePauses(snapshot.pauses)
         }
     }
 }

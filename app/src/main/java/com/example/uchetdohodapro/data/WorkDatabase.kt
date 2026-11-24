@@ -70,6 +70,11 @@ data class ShiftEntity(
     val isActive: Boolean = true
 )
 
+@Entity(tableName = "shift_pauses", foreignKeys = [ForeignKey(entity = ShiftEntity::class, parentColumns = ["id"], childColumns = ["shiftId"], onDelete = ForeignKey.CASCADE)], indices = [Index("shiftId")])
+data class ShiftPauseEntity(@PrimaryKey(autoGenerate = true) val id: Long = 0, val shiftId: Long, val startDate: String, val resumeDate: String? = null)
+
+fun ShiftPauseEntity.contains(date: LocalDate): Boolean = date >= LocalDate.parse(startDate) && (resumeDate == null || date < LocalDate.parse(resumeDate))
+
 /** A blank measurement stays null; invalid and non-finite input never becomes a stored zero. */
 fun parseNonNegativeNumber(text: String): Double? {
     val normalized = text.trim().replace(',', '.')
@@ -263,6 +268,7 @@ interface WorkDao {
             val shift = getShift(id) ?: error("Выбранная вахта больше не существует")
             require(dayBelongsToShift(day.date, shift)) { "Дата рабочего дня вне периода выбранной вахты" }
         }
+        require(backupPauses().none { it.shiftId == day.shiftId && it.contains(date) }) { "Дата входит в паузу вахты" }
         return insertWorkDayRaw(day)
     }
 
@@ -280,6 +286,7 @@ interface WorkDao {
             if (old.date != day.date || old.shiftId != day.shiftId)
                 require(dayBelongsToShift(day.date, shift)) { "Дата рабочего дня вне периода выбранной вахты" }
         }
+        require(backupPauses().none { it.shiftId == day.shiftId && it.contains(date) }) { "Дата входит в паузу вахты" }
         check(updateWorkDayRaw(day) == 1) { "Рабочий день уже удалён" }
     }
 
@@ -326,6 +333,32 @@ interface WorkDao {
     @Update
     suspend fun updateShiftRaw(shift: ShiftEntity): Int
 
+    @Query("SELECT * FROM shift_pauses ORDER BY startDate")
+    fun observePauses(): Flow<List<ShiftPauseEntity>>
+    @Query("SELECT * FROM shift_pauses")
+    suspend fun backupPauses(): List<ShiftPauseEntity>
+    @Insert
+    suspend fun restorePauses(pauses: List<ShiftPauseEntity>)
+    @Insert
+    suspend fun insertPause(pause: ShiftPauseEntity): Long
+    @Update
+    suspend fun updatePause(pause: ShiftPauseEntity): Int
+    @Transaction
+    suspend fun togglePause(shiftId: Long, date: LocalDate) {
+        val shift = getShift(shiftId) ?: error("Вахта не найдена")
+        require(shift.isActive && date >= parseStoredDate(shift.startDate)!! && date <= LocalDate.now()) { "Дата вне активной вахты" }
+        val pauses = backupPauses().filter { it.shiftId == shiftId }
+        val open = pauses.singleOrNull { it.resumeDate == null }
+        if (open != null) {
+            require(date > LocalDate.parse(open.startDate)) { "Дата продолжения должна быть позже начала паузы" }
+            updatePause(open.copy(resumeDate = date.toString()))
+        } else {
+            require(pauses.all { it.resumeDate != null && date >= LocalDate.parse(it.resumeDate) }) { "Дата пересекает предыдущую паузу" }
+            require(backupDays().none { it.shiftId == shiftId && parseStoredDate(it.date)!! >= date }) { "В периоде уже есть рабочие дни" }
+            insertPause(ShiftPauseEntity(shiftId = shiftId, startDate = date.toString()))
+        }
+    }
+
     @Transaction
     suspend fun insertShift(shift: ShiftEntity): Long {
         validateShiftDates(shift)
@@ -343,6 +376,18 @@ interface WorkDao {
                 "Новые даты исключают связанные рабочие дни. Сначала измените их привязку в истории."
             }
         }
+        val shiftPauses = backupPauses().filter { it.shiftId == shift.id }
+        if (!shift.isActive && shiftPauses.any { it.resumeDate == null }) {
+            val end = shift.endDate?.let { parseStoredDate(it) } ?: error("Укажите конец вахты")
+            shiftPauses.filter { it.resumeDate == null }.forEach { p ->
+                require(end >= LocalDate.parse(p.startDate)) { "Конец вахты раньше начала паузы" }
+                check(updatePause(p.copy(resumeDate = end.plusDays(1).toString())) == 1)
+            }
+        }
+        require(backupPauses().filter { it.shiftId == shift.id }.all { p ->
+            LocalDate.parse(p.startDate) >= parseStoredDate(shift.startDate)!! &&
+                (shift.isActive || (p.resumeDate != null && LocalDate.parse(p.resumeDate).minusDays(1) <= parseStoredDate(shift.endDate!!)!!))
+        }) { "Сначала завершите паузу или проверьте даты вахты" }
         check(updateShiftRaw(shift) == 1) { "Вахта уже удалена" }
     }
     
@@ -376,9 +421,10 @@ interface WorkDao {
         TariffEntity::class,
         WorkDayEntity::class,
         ShiftEntity::class,
-        MoneyOperationEntity::class
+        MoneyOperationEntity::class,
+        ShiftPauseEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class WorkDatabase : RoomDatabase() {
@@ -434,6 +480,13 @@ abstract class WorkDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `shift_pauses` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `shiftId` INTEGER NOT NULL, `startDate` TEXT NOT NULL, `resumeDate` TEXT, FOREIGN KEY(`shiftId`) REFERENCES `shifts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shift_pauses_shiftId` ON `shift_pauses` (`shiftId`)")
+            }
+        }
+
         fun getInstance(context: Context): WorkDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -445,7 +498,7 @@ abstract class WorkDatabase : RoomDatabase() {
                         MIGRATION_1_2,
                         MIGRATION_2_3,
                         MIGRATION_3_4,
-                        MIGRATION_4_5
+                        MIGRATION_4_5, MIGRATION_5_6
                     )
                     .build()
                     .also { INSTANCE = it }
