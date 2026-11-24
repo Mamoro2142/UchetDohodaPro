@@ -543,6 +543,8 @@ fun ShiftScreen(
                         enabled = !busy
                     )
 
+                    editingShift?.let { ShiftPauseControls(it) }
+
                     if (errorMessage != null) {
                         Text(
                             text = errorMessage!!,

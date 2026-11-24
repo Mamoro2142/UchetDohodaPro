@@ -299,10 +299,13 @@ private fun HomeScreen(
     }.collectAsState(initial = emptyList())
 
     val operations by remember(dao) { dao.observeMoneyOperations() }.collectAsState(initial = emptyList())
-    val advances = financeTotal(operations, ADVANCE)
-    val fines = financeTotal(operations, FINE)
+    val activeShift = shifts.firstOrNull { it.isActive }
+    val currentDays = days.filter { activeShift != null && it.shiftId == activeShift.id }
+    val currentOperations = operations.filter { activeShift != null && it.shiftId == activeShift.id }
+    val advances = financeTotal(currentOperations, ADVANCE)
+    val fines = financeTotal(currentOperations, FINE)
 
-    val totalIncome = days.sumOf {
+    val totalIncome = currentDays.sumOf {
         it.calculateIncome()
     }
 
@@ -364,7 +367,7 @@ private fun HomeScreen(
                 modifier = Modifier.padding(20.dp)
             ) {
                 Text(
-                    "ЗАРАБОТАНО ВСЕГО",
+                    if (activeShift == null) "НЕТ АКТИВНОЙ ВАХТЫ" else "ЗАРАБОТАНО ЗА ВАХТУ",
                     color = SecondaryText,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold

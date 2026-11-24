@@ -148,6 +148,7 @@ fun ShiftDetailsScreen(
         HorizontalDivider()
 
         Text("Остаток к получению: ${money(totalIncome - advances - fines)}", style = MaterialTheme.typography.titleMedium)
+        ShiftCalendarSummary(shift, days, advances)
         MoneyOperationsPanel(shift.id)
         HorizontalDivider()
 
