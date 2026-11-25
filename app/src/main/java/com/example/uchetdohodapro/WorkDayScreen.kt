@@ -55,19 +55,18 @@ fun WorkDayScreen(onBack: () -> Unit = {}, initialDate: String? = null, initialS
         mutableStateOf<TariffEntity?>(null)
     }
 
-    var activeShiftId by remember {
-        mutableStateOf<Long?>(null)
-    }
-
-    var availableShifts by remember { mutableStateOf<List<ShiftEntity>>(emptyList()) }
+    val availableShifts = LocalIncomeSnapshot.current.shifts
+    val activeShiftId = availableShifts.firstOrNull { it.isActive }?.id
     var automaticShift by remember { mutableStateOf(initialShiftId == null) }
     var selectedShiftId by remember { mutableStateOf<Long?>(initialShiftId) }
     var showShiftPicker by remember { mutableStateOf(false) }
 
     // Порядковые номера вахт.
     // Внутренние ID базы данных не изменяются.
-    var shiftNumbers by remember {
-        mutableStateOf<Map<Long, Int>>(emptyMap())
+    val shiftNumbers = remember(availableShifts) {
+        availableShifts.sortedBy { it.id }.mapIndexed { index, shift ->
+            shift.id to (index + 1)
+        }.toMap()
     }
 
     fun shiftNumber(shiftId: Long?): Int? {
@@ -93,23 +92,6 @@ fun WorkDayScreen(onBack: () -> Unit = {}, initialDate: String? = null, initialS
     LaunchedEffect(dao) {
         dao.observeTariffs().collect { value ->
             tariffs = value
-        }
-    }
-
-    LaunchedEffect(dao) {
-        dao.observeShifts().collect { shifts ->
-            availableShifts = shifts
-
-            shiftNumbers = shifts
-                .sortedBy { it.id }
-                .mapIndexed { index, shift ->
-                    shift.id to (index + 1)
-                }
-                .toMap()
-
-            activeShiftId = shifts.firstOrNull {
-                it.isActive
-            }?.id
         }
     }
 

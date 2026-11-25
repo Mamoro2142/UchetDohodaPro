@@ -34,15 +34,11 @@ fun ShiftScreen(
 
     val scope = rememberCoroutineScope()
 
-    val shifts by remember(dao) {
-        dao.observeShifts()
-    }.collectAsState(initial = emptyList())
-
-    val loadedDays by remember(dao) { dao.observeWorkDays() }.collectAsState(initial = null)
-    val loadedOperations by remember(dao) { dao.observeMoneyOperations() }.collectAsState(initial = null)
-    val loadedPauses by remember(dao) { dao.observePauses() }.collectAsState(initial = null)
-    val workDays = loadedDays.orEmpty()
-    val operations = loadedOperations.orEmpty()
+    val data = LocalIncomeSnapshot.current
+    val shifts = data.shifts
+    val workDays = data.days
+    val operations = data.operations
+    val pauses = data.pauses
     val latestClosedId = latestClosedShift(shifts)?.id
 
     val activeShift = shifts.firstOrNull {
@@ -347,9 +343,9 @@ fun ShiftScreen(
                             SettlementRequestButton(
                                 shift = shift,
                                 days = workDays,
-                                pauses = loadedPauses.orEmpty(),
+                                pauses = pauses,
                                 advances = advances,
-                                enabled = !busy && loadedDays != null && loadedOperations != null && loadedPauses != null
+                                enabled = !busy
                             )
                         }
 

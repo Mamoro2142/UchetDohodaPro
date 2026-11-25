@@ -17,12 +17,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -42,17 +38,9 @@ private fun statsMoney(value: Double): String {
 
 @Composable
 fun StatisticsScreen() {
-    val context = LocalContext.current
-
-    val dao = remember(context) {
-        WorkDatabase.getInstance(context).workDao()
-    }
-
-    val days by remember(dao) {
-        dao.observeWorkDays()
-    }.collectAsState(initial = emptyList())
-
-    val operations by remember(dao) { dao.observeMoneyOperations() }.collectAsState(initial = emptyList())
+    val data = LocalIncomeSnapshot.current
+    val days = data.days
+    val operations = data.operations
     val advances = financeTotal(operations, ADVANCE)
     val fines = financeTotal(operations, FINE)
 

@@ -10,7 +10,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -39,9 +38,7 @@ private fun statusLabel(status: ShiftDayStatus) = when (status) {
 
 @Composable
 fun ShiftMonthCalendar(shift: ShiftEntity, days: List<WorkDayEntity>, selected: LocalDate, onSelect: (LocalDate) -> Unit, onEdit: (WorkDayEntity) -> Unit, onAdd: (LocalDate) -> Unit) {
-    val context = LocalContext.current
-    val dao = remember(context) { WorkDatabase.getInstance(context).workDao() }
-    val pauses by remember(dao) { dao.observePauses() }.collectAsState(emptyList())
+    val pauses = LocalIncomeSnapshot.current.pauses
     val today = LocalDate.now()
     val model = remember(shift, days, pauses, today) { ShiftCalendarModel(shift, days, pauses, today) }
     val month = YearMonth.from(selected)

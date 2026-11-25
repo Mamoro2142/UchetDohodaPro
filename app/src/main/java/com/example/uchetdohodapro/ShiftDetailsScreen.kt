@@ -34,11 +34,9 @@ fun ShiftDetailsScreen(
         WorkDatabase.getInstance(context).workDao()
     }
 
-    val days by remember(dao, shift.id) {
-        dao.observeWorkDaysForShift(shift.id)
-    }.collectAsState(initial = emptyList())
-
-    val operations by remember(dao) { dao.observeMoneyOperations() }.collectAsState(initial = emptyList())
+    val data = LocalIncomeSnapshot.current
+    val days = remember(data.days, shift.id) { data.days.filter { it.shiftId == shift.id } }
+    val operations = data.operations
     val shiftOperations = operations.filter { it.shiftId == shift.id }
     val advances = financeTotal(shiftOperations, ADVANCE)
     val fines = financeTotal(shiftOperations, FINE)
@@ -53,7 +51,7 @@ fun ShiftDetailsScreen(
     var deleteConfirm by remember { mutableStateOf(false) }
     var editError by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
-    val shifts by remember(dao) { dao.observeShifts() }.collectAsState(emptyList())
+    val shifts = data.shifts
     val shiftNumbers = shifts.sortedBy { it.id }.mapIndexed { i, s -> s.id to i + 1 }.toMap()
     BackHandler(enabled = addDate != null || editDay != null) {
         if (!saving) { addDate = null; editDay = null; editError = "" }

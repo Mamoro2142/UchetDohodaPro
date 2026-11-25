@@ -46,13 +46,9 @@ fun WorkHistoryScreen() {
     }
     val scope = rememberCoroutineScope()
 
-    val days by remember(dao) {
-        dao.observeWorkDays()
-    }.collectAsState(initial = emptyList())
-
-    val shifts by remember(dao) {
-        dao.observeShifts()
-    }.collectAsState(initial = emptyList())
+    val data = LocalIncomeSnapshot.current
+    val days = data.days
+    val shifts = data.shifts
 
     // Единая нумерация существующих вахт: 1, 2, 3...
     // ID в базе данных не изменяем.

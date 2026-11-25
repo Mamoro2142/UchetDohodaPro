@@ -20,8 +20,9 @@ fun MoneyOperationsPanel(shiftId: Long? = null) {
     val context = LocalContext.current
     val dao = remember(context) { WorkDatabase.getInstance(context).workDao() }
     val scope = rememberCoroutineScope()
-    val allOperations by remember(dao) { dao.observeMoneyOperations() }.collectAsState(initial = emptyList())
-    val shifts by remember(dao) { dao.observeShifts() }.collectAsState(initial = emptyList())
+    val data = LocalIncomeSnapshot.current
+    val allOperations = data.operations
+    val shifts = data.shifts
     val operations = allOperations.filter { shiftId == null || it.shiftId == shiftId }
     val numbers = shifts.sortedBy { it.id }.mapIndexed { index, shift -> shift.id to index + 1 }.toMap()
     var showForm by remember { mutableStateOf(false) }

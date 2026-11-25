@@ -20,7 +20,7 @@ import kotlinx.coroutines.launch
 fun ShiftPauseControls(shift: ShiftEntity, enabled: Boolean = true) {
     val context = LocalContext.current
     val dao = remember(context) { WorkDatabase.getInstance(context).workDao() }
-    val all by remember(dao) { dao.observePauses() }.collectAsState(emptyList())
+    val all = LocalIncomeSnapshot.current.pauses
     val paused = all.any { it.shiftId == shift.id && it.resumeDate == null }
     var dialog by remember { mutableStateOf(false) }
     var date by remember { mutableStateOf("") }
@@ -52,9 +52,7 @@ fun ShiftPauseControls(shift: ShiftEntity, enabled: Boolean = true) {
 
 @Composable
 fun ShiftCalendarSummary(shift: ShiftEntity, days: List<WorkDayEntity>) {
-    val context = LocalContext.current
-    val dao = remember(context) { WorkDatabase.getInstance(context).workDao() }
-    val all by remember(dao) { dao.observePauses() }.collectAsState(emptyList())
+    val all = LocalIncomeSnapshot.current.pauses
     val pauses = all.filter { it.shiftId == shift.id }
     val work = days.mapNotNull { parseStoredDate(it.date) }.distinct().sorted()
     val fmt = DateTimeFormatter.ofPattern("dd.MM.uuuu")

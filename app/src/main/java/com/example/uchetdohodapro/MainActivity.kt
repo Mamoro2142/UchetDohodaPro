@@ -17,7 +17,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -54,7 +53,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = Background
                 ) {
-                    WinterThemeHost { IncomeApp() }
+                    IncomeDataHost { WinterThemeHost { IncomeApp() } }
                 }
             }
         }
@@ -283,7 +282,6 @@ private fun HomeScreen(
     onAddClick: () -> Unit,
     onHistoryClick: () -> Unit
 ) {
-    val context = LocalContext.current
     val appearance = checkNotNull(LocalWinterAppearance.current)
     val winterEnabled = appearance.enabled
     val winterHintSeen = appearance.hintSeen
@@ -291,19 +289,10 @@ private fun HomeScreen(
     // When the theme is off, only the Home toggle needs animation.
     val togglePhase = winterPhase ?: rememberWinterPhase()
 
-    val dao = remember(context) {
-        WorkDatabase.getInstance(context).workDao()
-    }
-
-    val days by remember(dao) {
-        dao.observeWorkDays()
-    }.collectAsState(initial = emptyList())
-
-    val shifts by remember(dao) {
-        dao.observeShifts()
-    }.collectAsState(initial = emptyList())
-
-    val operations by remember(dao) { dao.observeMoneyOperations() }.collectAsState(initial = emptyList())
+    val data = LocalIncomeSnapshot.current
+    val days = data.days
+    val shifts = data.shifts
+    val operations = data.operations
     val activeShift = shifts.firstOrNull { it.isActive }
     val currentDays = days.filter { activeShift != null && it.shiftId == activeShift.id }
     val currentOperations = operations.filter { activeShift != null && it.shiftId == activeShift.id }

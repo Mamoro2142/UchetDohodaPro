@@ -88,7 +88,7 @@ fun ShiftProgressCard(shift: ShiftEntity, days: List<WorkDayEntity>, winterPhase
     if (plan <= 0) return
     val context = LocalContext.current
     val dao = remember(context) { WorkDatabase.getInstance(context).workDao() }
-    val pauses by remember(dao) { dao.observePauses() }.collectAsState(emptyList())
+    val pauses = LocalIncomeSnapshot.current.pauses
     val today = java.time.LocalDate.now()
     val model = remember(shift, days, pauses, today) { ShiftCalendarModel(shift, days, pauses, today) }
     val count = model.workCount
