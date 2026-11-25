@@ -16,8 +16,8 @@ android {
         applicationId = "com.example.uchetdohodapro"
         minSdk = 23
         targetSdk = 35
-        versionCode = 20
-        versionName = "1.1.9"
+        versionCode = 21
+        versionName = "1.1.10"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
