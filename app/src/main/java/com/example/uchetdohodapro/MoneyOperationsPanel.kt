@@ -41,7 +41,7 @@ fun MoneyOperationsPanel(shiftId: Long? = null) {
         if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
         if (operations.isEmpty()) Text("Финансовых операций пока нет", style = MaterialTheme.typography.bodySmall)
         operations.forEach { operation ->
-            Card(Modifier.fillMaxWidth()) {
+            Card(Modifier.fillMaxWidth().seasonalCard()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("${operation.date} · ${if (operation.type == ADVANCE) "Аванс" else "Штраф"} · ${money(operation.amountMinor / 100.0)}")
                     Text(operation.shiftId?.let { numbers[it]?.let { n -> "Вахта №$n" } } ?: "Без привязки к вахте", style = MaterialTheme.typography.bodySmall)

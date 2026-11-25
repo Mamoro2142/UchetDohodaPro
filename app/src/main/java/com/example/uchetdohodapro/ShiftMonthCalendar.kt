@@ -55,7 +55,7 @@ fun ShiftMonthCalendar(shift: ShiftEntity, days: List<WorkDayEntity>, selected: 
         val candidate = month.plusMonths(delta)
         if (candidate.year in 1..9999) onSelect(candidate.atDay(1))
     }
-    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color(0xFF1C2023)), shape = RoundedCornerShape(18.dp)) {
+    Card(Modifier.fillMaxWidth().seasonalCard(18.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF1C2023)), shape = RoundedCornerShape(18.dp)) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Календарь вахты", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {

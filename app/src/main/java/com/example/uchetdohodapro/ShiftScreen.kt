@@ -155,6 +155,7 @@ fun ShiftScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            WinterPageHeader()
             Text(
                 text = "Управление вахтами",
                 style = MaterialTheme.typography.headlineSmall
@@ -177,7 +178,7 @@ fun ShiftScreen(
                 }
             } else {
                 Card(
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth().seasonalCard()
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
@@ -255,7 +256,7 @@ fun ShiftScreen(
             }
             shifts.forEach { shift ->
                 Card(
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth().seasonalCard()
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp),

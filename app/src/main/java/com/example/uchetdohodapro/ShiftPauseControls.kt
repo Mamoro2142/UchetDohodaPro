@@ -72,7 +72,7 @@ fun ShiftCalendarSummary(shift: ShiftEntity, days: List<WorkDayEntity>) {
     val entries = (work.map { Triple(it, it.format(fmt), "Рабочая смена") } +
         weekends.map { Triple(it, it.format(fmt), "Выходной") } +
         pauses.zip(pauseLabels).map { (p, label) -> Triple(LocalDate.parse(p.startDate), label, "Пауза вахты") }).sortedBy { it.first }
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(modifier = Modifier.fillMaxWidth().seasonalCard()) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Хронология вахты", style = MaterialTheme.typography.titleMedium)
             HorizontalDivider()

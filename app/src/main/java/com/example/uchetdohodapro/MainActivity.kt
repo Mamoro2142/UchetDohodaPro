@@ -54,7 +54,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = Background
                 ) {
-                    IncomeApp()
+                    WinterThemeHost { IncomeApp() }
                 }
             }
         }
@@ -284,10 +284,12 @@ private fun HomeScreen(
     onHistoryClick: () -> Unit
 ) {
     val context = LocalContext.current
-    var winterEnabled by remember(context) { mutableStateOf(WinterPreferences.enabled(context)) }
-    var winterHintSeen by remember(context) { mutableStateOf(WinterPreferences.hintSeen(context)) }
-    val togglePhase = rememberWinterPhase()
-    val winterPhase = if (winterEnabled) togglePhase else null
+    val appearance = checkNotNull(LocalWinterAppearance.current)
+    val winterEnabled = appearance.enabled
+    val winterHintSeen = appearance.hintSeen
+    val winterPhase = LocalWinterPhase.current
+    // When the theme is off, only the Home toggle needs animation.
+    val togglePhase = winterPhase ?: rememberWinterPhase()
 
     val dao = remember(context) {
         WorkDatabase.getInstance(context).workDao()
@@ -345,11 +347,7 @@ private fun HomeScreen(
                     Text("Главная", color = MainText, fontSize = 29.sp, fontWeight = FontWeight.Bold)
                     Text("Твой заработок под контролем", color = SecondaryText, fontSize = 14.sp)
                 }
-                WinterToggle(winterEnabled, togglePhase) {
-                    winterEnabled = !winterEnabled
-                    WinterPreferences.setEnabled(context, winterEnabled)
-                    winterHintSeen = true
-                }
+                WinterToggle(winterEnabled, togglePhase, onToggle = appearance::toggle)
             }
 
             if (showWinterHint(winterEnabled, winterHintSeen)) {
@@ -648,7 +646,6 @@ private fun HomeScreen(
                 }
             }
         }
-        if (winterPhase != null) WinterEdgeSnow(winterPhase, Modifier.matchParentSize())
     }
 }
 
@@ -685,6 +682,7 @@ private fun ProfileScreen(
             .verticalScroll(rememberScrollState())
             .padding(22.dp)
     ) {
+        WinterPageHeader()
         Text(
             "УЧЁТ ДОХОДА",
             color = Orange,
@@ -705,7 +703,7 @@ private fun ProfileScreen(
         Spacer(Modifier.height(22.dp))
 
         Card(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().seasonalCard(18.dp),
             shape = RoundedCornerShape(18.dp),
             colors = CardDefaults.cardColors(
                 containerColor = Panel
@@ -751,7 +749,7 @@ private fun ProfileScreen(
         Spacer(Modifier.height(14.dp))
 
         Card(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().seasonalCard(18.dp),
             shape = RoundedCornerShape(18.dp),
             colors = CardDefaults.cardColors(
                 containerColor = Panel

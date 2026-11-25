@@ -124,6 +124,7 @@ fun WorkDayScreen(onBack: () -> Unit = {}, initialDate: String? = null, initialS
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        WinterPageHeader()
         Button(
             onClick = onBack,
             colors = ButtonDefaults.buttonColors(
@@ -146,7 +147,7 @@ fun WorkDayScreen(onBack: () -> Unit = {}, initialDate: String? = null, initialS
                 containerColor = Color(0xFF202428)
             ),
             shape = RoundedCornerShape(14.dp),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().seasonalCard(14.dp)
         ) {
             Column(
                 modifier = Modifier.padding(16.dp)
@@ -264,7 +265,7 @@ fun WorkDayScreen(onBack: () -> Unit = {}, initialDate: String? = null, initialS
                 containerColor = Color(0xFF202428)
             ),
             shape = RoundedCornerShape(16.dp),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().seasonalCard(16.dp)
         ) {
             Column(
                 modifier = Modifier.padding(16.dp)

@@ -131,6 +131,7 @@ fun WorkHistoryScreen() {
                 .fillMaxSize()
                 .padding(20.dp)
         ) {
+            WinterPageHeader()
             Text(
                 "ИСТОРИЯ РАБОЧИХ ДНЕЙ",
                 color = HistoryOrange,
@@ -141,7 +142,7 @@ fun WorkHistoryScreen() {
             Spacer(Modifier.height(16.dp))
 
             Card(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().seasonalCard(18.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = HistoryPanel
                 ),
@@ -289,7 +290,8 @@ private fun WorkHistoryCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            .seasonalCard(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = HistoryPanelLight
         ),
@@ -429,6 +431,7 @@ internal fun WorkDayEditScreen(
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        WinterPageHeader()
         Button(
             onClick = onBack,
             enabled = !saving,
@@ -496,7 +499,7 @@ internal fun WorkDayEditScreen(
         )
 
         Card(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().seasonalCard(16.dp),
             colors = CardDefaults.cardColors(
                 containerColor = HistoryPanel
             ),
@@ -542,7 +545,7 @@ internal fun WorkDayEditScreen(
 
         
         Card(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().seasonalCard(16.dp),
             colors = CardDefaults.cardColors(
                 containerColor = HistoryPanel
             ),

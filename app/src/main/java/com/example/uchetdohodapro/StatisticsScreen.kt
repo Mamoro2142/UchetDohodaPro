@@ -84,6 +84,7 @@ fun StatisticsScreen() {
             .verticalScroll(rememberScrollState())
             .padding(20.dp)
     ) {
+        WinterPageHeader()
         Text(
             "УЧЁТ ДОХОДА",
             color = StatsOrange,
@@ -112,7 +113,7 @@ fun StatisticsScreen() {
         Spacer(Modifier.height(22.dp))
 
         Card(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().seasonalCard(22.dp),
             shape = RoundedCornerShape(22.dp),
             colors = CardDefaults.cardColors(
                 containerColor = StatsPanel
@@ -161,7 +162,7 @@ fun StatisticsScreen() {
         Spacer(Modifier.height(14.dp))
 
         Card(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().seasonalCard(18.dp),
             shape = RoundedCornerShape(18.dp),
             colors = CardDefaults.cardColors(
                 containerColor = StatsPanel
@@ -227,7 +228,7 @@ fun StatisticsScreen() {
                 ).toFloat().coerceIn(0f, 1f)
 
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().seasonalCard(16.dp),
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = StatsPanel
@@ -297,7 +298,7 @@ private fun StatsSmallCard(
     value: String
 ) {
     Card(
-        modifier = modifier,
+        modifier = modifier.seasonalCard(18.dp),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(
             containerColor = StatsPanelLight

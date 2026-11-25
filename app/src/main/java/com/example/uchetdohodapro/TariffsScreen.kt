@@ -106,6 +106,7 @@ fun TariffsScreen(
             .verticalScroll(rememberScrollState())
             .padding(20.dp)
     ) {
+        WinterPageHeader()
         Button(
     onClick = onBack,
     colors = ButtonDefaults.buttonColors(
@@ -254,7 +255,8 @@ private fun TariffInput(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = 12.dp),
+            .padding(bottom = 12.dp)
+            .seasonalCard(18.dp),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = TariffPanel)
     ) {

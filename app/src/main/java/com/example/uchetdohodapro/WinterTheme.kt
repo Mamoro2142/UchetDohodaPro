@@ -16,6 +16,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.drawWithContent
@@ -58,7 +66,49 @@ internal object WinterPreferences {
     }
 }
 
-/** A single slow clock for the toggle and, when enabled, seasonal decorations on Home. */
+/** One state owner for every route, including standalone forms and nested screens. */
+internal class WinterAppearance(private val context: Context) {
+    var enabled by mutableStateOf(WinterPreferences.enabled(context))
+        private set
+    var hintSeen by mutableStateOf(WinterPreferences.hintSeen(context))
+        private set
+
+    fun toggle() {
+        val next = !enabled
+        WinterPreferences.setEnabled(context, next)
+        hintSeen = true
+        enabled = next
+    }
+}
+
+internal val LocalWinterAppearance = staticCompositionLocalOf<WinterAppearance?> { null }
+internal val LocalWinterPhase = staticCompositionLocalOf<State<Float>?> { null }
+
+/** The single seasonal animation clock lives above navigation, not inside a tab. */
+@Composable
+internal fun WinterThemeHost(content: @Composable () -> Unit) {
+    val context = LocalContext.current.applicationContext
+    val appearance = remember(context) { WinterAppearance(context) }
+    val phase = if (appearance.enabled) rememberWinterPhase() else null
+    CompositionLocalProvider(LocalWinterAppearance provides appearance, LocalWinterPhase provides phase) {
+        Box(Modifier.fillMaxSize()) {
+            content()
+            if (phase != null) WinterEdgeSnow(phase, Modifier.matchParentSize())
+        }
+    }
+}
+
+/** A header in each page's own content; absent altogether in the standard theme. */
+@Composable
+internal fun WinterPageHeader() {
+    LocalWinterPhase.current?.let { WinterHeader(it) }
+}
+
+@Composable
+internal fun Modifier.seasonalCard(radius: Dp = 12.dp): Modifier =
+    winterCard(LocalWinterPhase.current, radius)
+
+/** A single slow clock for the active theme, or the toggle alone when disabled. */
 @Composable
 internal fun rememberWinterPhase(): State<Float> {
     val clock = rememberInfiniteTransition(label = "winter")
@@ -231,12 +281,12 @@ private val snowParticles = Random(2026).let { random ->
     List(16) { i -> SnowParticle(random.nextFloat(), random.nextFloat(), 0.7f + random.nextFloat() * 1.4f, 1 + i % 2, i % 2 == 0) }
 }
 
-/** Non-interactive foreground decoration, restricted to gutters outside the 20dp content margin. */
+/** Non-interactive foreground decoration, restricted to narrow screen-edge gutters. */
 @Composable
 internal fun WinterEdgeSnow(phase: State<Float>, modifier: Modifier = Modifier) {
     Canvas(modifier) {
         val t = phase.value
-        val gutter = 17.dp.toPx()
+        val gutter = 8.dp.toPx()
         snowParticles.forEachIndexed { index, p ->
             val drift = sin(2.0 * PI * (t * 2 + p.y)).toFloat() * 1.5.dp.toPx()
             val edgeX = (4.dp.toPx() + p.x * 8.dp.toPx() + drift).coerceIn(2.dp.toPx(), gutter)
@@ -251,7 +301,7 @@ internal fun WinterEdgeSnow(phase: State<Float>, modifier: Modifier = Modifier) 
 }
 
 /** Thin snow cap and subtle warm highlight, strictly within the existing card bounds. */
-internal fun Modifier.winterCard(phase: State<Float>?): Modifier {
+internal fun Modifier.winterCard(phase: State<Float>?, radius: Dp = 22.dp): Modifier {
     if (phase == null) return this
     return drawWithContent {
         drawContent()
@@ -260,8 +310,8 @@ internal fun Modifier.winterCard(phase: State<Float>?): Modifier {
         if (size.width <= inset * 2 || size.height <= inset * 2) return@drawWithContent
         drawRoundRect(Warm.copy(alpha = 0.12f + 0.17f * winterPulse(t, 2)),
             topLeft = Offset(inset, inset), size = Size(size.width - 2 * inset, size.height - 2 * inset),
-            cornerRadius = CornerRadius(21.dp.toPx()), style = Stroke(1.dp.toPx()))
-        val left = 22.dp.toPx()
+            cornerRadius = CornerRadius((radius.toPx() - inset).coerceAtLeast(0f)), style = Stroke(1.dp.toPx()))
+        val left = radius.toPx().coerceAtLeast(8.dp.toPx())
         val right = size.width - left
         if (right <= left) return@drawWithContent
         val width = right - left

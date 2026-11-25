@@ -141,6 +141,7 @@ fun ShiftDetailsScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        WinterPageHeader()
         TextButton(onClick = onBack) {
             Text(
                 "← Назад к вахтам",
@@ -264,7 +265,7 @@ fun ShiftDetailsScreen(
             sortedDays.forEach { day ->
 
                 Card(
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth().seasonalCard()
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
