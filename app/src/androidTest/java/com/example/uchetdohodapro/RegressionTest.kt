@@ -81,6 +81,19 @@ class UpgradeRegressionTest : RegressionBase() {
             assertEquals(3.085, old.calculateIncome(), 0.00000001)
             assertNull(dao.backupTariffs().single().savedAt)
         }
+        waitForText("ЗАРАБОТАНО ЗА ВАХТУ")
+        // Navigation must reuse the loaded data instead of briefly showing an empty database.
+        repeat(5) {
+            compose.onNodeWithText("Вахта").performClick()
+            compose.onNodeWithText("Активная вахта №1").assertExists()
+            compose.onNodeWithText("Начать вахту").assertDoesNotExist()
+            compose.onNodeWithText("Вахт пока нет").assertDoesNotExist()
+            check(compose.onAllNodesWithText("Заработано: 3,09 ₽").fetchSemanticsNodes().isNotEmpty())
+            compose.onNodeWithText("Главная").performClick()
+            compose.onNodeWithText("ЗАРАБОТАНО ЗА ВАХТУ").assertExists()
+            compose.onNodeWithText("НЕТ АКТИВНОЙ ВАХТЫ").assertDoesNotExist()
+            check(compose.onAllNodesWithText("3,09 ₽").fetchSemanticsNodes().isNotEmpty())
+        }
         shot("01-updated-home")
         compose.onNodeWithText("Добавить рабочий день", substring = true).performScrollTo().performClick()
         compose.onNodeWithText("НОВЫЙ РАБОЧИЙ ДЕНЬ").assertExists()
