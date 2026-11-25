@@ -336,6 +336,27 @@ class BackupTest {
             assertEquals(today.plusDays(1).toString(), dao.backupPauses().maxByOrNull { it.startDate }!!.resumeDate)
         } finally { db.close() }
     }
+    @Test fun activeShiftPlanCanBeSetChangedReducedAndCleared() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), WorkDatabase::class.java).build()
+        try {
+            val dao = db.workDao()
+            val today = java.time.LocalDate.now()
+            val id = dao.insertShift(ShiftEntity(startDate = today.minusDays(3).toString()))
+            dao.insertWorkDay(WorkDayEntity(date = today.minusDays(3).toString(), shiftId = id, picks = 2.0, picksRate = 5.0))
+            dao.insertWorkDay(WorkDayEntity(date = today.minusDays(2).toString(), shiftId = id, picks = 3.0, picksRate = 5.0))
+            val original = dao.getShift(id)!!
+            val days = dao.backupDays()
+            assertNull(original.plannedWorkDays)
+            for (plan in listOf(15, 20, 1, null)) {
+                dao.setShiftPlan(id, plan)
+                assertEquals(original.copy(plannedWorkDays = plan), dao.getShift(id))
+                assertEquals(days, dao.backupDays())
+            }
+            assertTrue(runCatching { dao.setShiftPlan(id, -1) }.isFailure)
+            assertNull(dao.getShift(id)!!.plannedWorkDays)
+        } finally { db.close() }
+    }
+
     @Test fun planAndPausesSurviveOldAndNewBackupFormats() = runBlocking {
         val db = Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), WorkDatabase::class.java).build()
         try {
