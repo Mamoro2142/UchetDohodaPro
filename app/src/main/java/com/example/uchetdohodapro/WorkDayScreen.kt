@@ -275,7 +275,7 @@ fun WorkDayScreen(onBack: () -> Unit = {}, initialDate: String? = null, initialS
                 )
 
                 Text(
-                    if (income.isFinite()) String.format(Locale.getDefault(), "%.2f ₽", income) else "Проверьте показатели",
+                    if (income.isFinite()) formatRubles(income) else "Проверьте показатели",
                     color = Color(0xFF4CAF50),
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold

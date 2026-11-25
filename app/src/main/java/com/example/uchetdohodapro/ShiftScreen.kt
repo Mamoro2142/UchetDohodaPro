@@ -21,7 +21,6 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.ResolverStyle
 import com.example.uchetdohodapro.data.uniqueWorkDayCount
-import java.util.Locale
 
 @Composable
 fun ShiftScreen(
@@ -39,11 +38,12 @@ fun ShiftScreen(
         dao.observeShifts()
     }.collectAsState(initial = emptyList())
 
-    val workDays by remember(dao) {
-        dao.observeWorkDays()
-    }.collectAsState(initial = emptyList())
-
-    val operations by remember(dao) { dao.observeMoneyOperations() }.collectAsState(initial = emptyList())
+    val loadedDays by remember(dao) { dao.observeWorkDays() }.collectAsState(initial = null)
+    val loadedOperations by remember(dao) { dao.observeMoneyOperations() }.collectAsState(initial = null)
+    val loadedPauses by remember(dao) { dao.observePauses() }.collectAsState(initial = null)
+    val workDays = loadedDays.orEmpty()
+    val operations = loadedOperations.orEmpty()
+    val latestClosedId = latestClosedShift(shifts)?.id
 
     val activeShift = shifts.firstOrNull {
         it.isActive
@@ -68,11 +68,7 @@ fun ShiftScreen(
     }
 
     fun money(value: Double): String {
-        return String.format(
-            Locale.getDefault(),
-            "%.2f ₽",
-            value
-        )
+        return formatRubles(value)
     }
 
     // Порядковые номера вместо внутренних ID.
@@ -213,7 +209,7 @@ fun ShiftScreen(
                             style = MaterialTheme.typography.titleLarge
                         )
 
-                        CompactShiftPlan(activeShift, shiftDaysCount(activeShift.id))
+                        CompactShiftPlan(activeShift, shiftDaysCount(activeShift.id), enabled = !busy)
 
                         Button(
                             onClick = {
@@ -337,8 +333,23 @@ fun ShiftScreen(
                             Text("Изменить даты")
                         }
 
+                        if (shift.isActive) {
+                            key(shift.id) {
+                                ShiftPlanEditButton(shift, enabled = !busy)
+                            }
+                        }
                         key(shift.id) {
                             ShiftPauseControls(shift, enabled = !busy)
+                        }
+
+                        if (shift.id == latestClosedId) {
+                            SettlementRequestButton(
+                                shift = shift,
+                                days = workDays,
+                                pauses = loadedPauses.orEmpty(),
+                                advances = advances,
+                                enabled = !busy && loadedDays != null && loadedOperations != null && loadedPauses != null
+                            )
                         }
 
                         OutlinedButton(

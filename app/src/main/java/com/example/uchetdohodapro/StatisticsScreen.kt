@@ -27,7 +27,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.uchetdohodapro.data.*
-import java.util.Locale
 
 private val StatsBackground = Color(0xFF111315)
 private val StatsPanel = Color(0xFF1C2023)
@@ -38,11 +37,7 @@ private val StatsText = Color(0xFFF4F5F6)
 private val StatsSecondary = Color(0xFF9DA5AB)
 
 private fun statsMoney(value: Double): String {
-    return String.format(
-        Locale.getDefault(),
-        "%,.2f ₽",
-        value
-    )
+    return formatRubles(value)
 }
 
 @Composable

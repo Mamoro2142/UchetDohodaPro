@@ -14,7 +14,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.math.BigDecimal
 import java.time.LocalDate
-import java.util.Locale
 
 @Composable
 fun MoneyOperationsPanel(shiftId: Long? = null) {
@@ -30,7 +29,7 @@ fun MoneyOperationsPanel(shiftId: Long? = null) {
     var deleting by remember { mutableStateOf<MoneyOperationEntity?>(null) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf("") }
-    fun money(value: Double) = String.format(Locale.getDefault(), "%.2f ₽", value)
+    fun money(value: Double) = formatRubles(value)
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Авансы и штрафы", style = MaterialTheme.typography.titleMedium)

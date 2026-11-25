@@ -156,11 +156,7 @@ fun WorkHistoryScreen() {
                     )
 
                     Text(
-                        String.format(
-                            Locale.getDefault(),
-                            "%.2f ₽",
-                            total
-                        ),
+                        formatRubles(total),
                         color = HistoryGreen,
                         fontSize = 30.sp,
                         fontWeight = FontWeight.Bold
@@ -312,11 +308,7 @@ private fun WorkHistoryCard(
             Spacer(Modifier.height(6.dp))
 
             Text(
-                String.format(
-                    Locale.getDefault(),
-                    "%.2f ₽",
-                    day.calculateIncome()
-                ),
+                formatRubles(day.calculateIncome()),
                 color = HistoryGreen,
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold
@@ -565,7 +557,7 @@ internal fun WorkDayEditScreen(
                 )
 
                 Text(
-                    if (income.isFinite()) String.format(Locale.getDefault(), "%.2f ₽", income) else "Проверьте показатели",
+                    if (income.isFinite()) formatRubles(income) else "Проверьте показатели",
                     color = HistoryGreen,
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold

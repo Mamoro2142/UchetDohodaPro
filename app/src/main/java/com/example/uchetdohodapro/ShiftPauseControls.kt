@@ -51,7 +51,7 @@ fun ShiftPauseControls(shift: ShiftEntity, enabled: Boolean = true) {
 }
 
 @Composable
-fun ShiftCalendarSummary(shift: ShiftEntity, days: List<WorkDayEntity>, advances: Double) {
+fun ShiftCalendarSummary(shift: ShiftEntity, days: List<WorkDayEntity>) {
     val context = LocalContext.current
     val dao = remember(context) { WorkDatabase.getInstance(context).workDao() }
     val all by remember(dao) { dao.observePauses() }.collectAsState(emptyList())
@@ -95,19 +95,24 @@ fun ShiftCalendarSummary(shift: ShiftEntity, days: List<WorkDayEntity>, advances
             }
         }
     }
+}
+
+@Composable
+internal fun SettlementRequestButton(
+    shift: ShiftEntity,
+    days: List<WorkDayEntity>,
+    pauses: List<ShiftPauseEntity>,
+    advances: Double,
+    enabled: Boolean
+) {
+    val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
-    if (!shift.isActive) OutlinedButton(onClick = {
-        clipboard.setText(AnnotatedString(buildString {
-            appendLine("Прошу поставить на расчёт 💰")
-            appendLine("ФИО:")
-            appendLine("Начало вахты: ${shift.startDate}")
-            appendLine("Конец вахты: ${shift.endDate.orEmpty()}")
-            appendLine("Выходные: ${weekends.joinToString { it.format(fmt) }.ifEmpty { "нету" }}")
-            if (pauseLabels.isNotEmpty()) appendLine("Пауза вахты: ${pauseLabels.joinToString()}")
-            appendLine("Авансы: ${String.format(java.util.Locale.getDefault(), "%.2f", advances)} ₽")
-            appendLine("ИНН:")
-            append("Номер:")
-        }))
-        Toast.makeText(context, "Заявление на расчёт скопировано", Toast.LENGTH_SHORT).show()
-    }) { Text("Прошу поставить на расчёт") }
+    OutlinedButton(
+        onClick = {
+            clipboard.setText(AnnotatedString(settlementRequestText(shift, days, pauses, advances)))
+            Toast.makeText(context, "Заявление на расчёт скопировано", Toast.LENGTH_SHORT).show()
+        },
+        enabled = enabled,
+        modifier = Modifier.fillMaxWidth()
+    ) { Text("Прошу поставить на расчёт") }
 }

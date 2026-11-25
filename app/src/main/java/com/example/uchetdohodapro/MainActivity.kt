@@ -24,7 +24,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.uchetdohodapro.data.*
-import java.util.Locale
 
 private val Background = Color(0xFF111315)
 private val Panel = Color(0xFF1C2023)
@@ -314,11 +313,7 @@ private fun HomeScreen(
     val recentDays = days.take(3)
 
     fun money(value: Double): String {
-        return String.format(
-            Locale.getDefault(),
-            "%.2f ₽",
-            value
-        )
+        return formatRubles(value)
     }
 
     Column(

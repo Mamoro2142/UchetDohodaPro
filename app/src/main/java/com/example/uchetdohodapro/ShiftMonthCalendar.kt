@@ -18,7 +18,6 @@ import com.example.uchetdohodapro.data.*
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 private val CalendarGreen = Color(0xFF55C58A)
 private val CalendarYellow = Color(0xFFEAC54C)
@@ -51,7 +50,7 @@ fun ShiftMonthCalendar(shift: ShiftEntity, days: List<WorkDayEntity>, selected: 
     val rows = (firstOffset + dates.size + 6) / 7
     val shape = RoundedCornerShape(8.dp)
     val fmt = DateTimeFormatter.ofPattern("dd.MM.uuuu")
-    fun money(value: Double) = String.format(Locale.getDefault(), "%.2f ₽", value)
+    fun money(value: Double) = formatRubles(value)
     fun changeMonth(delta: Long) {
         val candidate = month.plusMonths(delta)
         if (candidate.year in 1..9999) onSelect(candidate.atDay(1))

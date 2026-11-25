@@ -89,11 +89,7 @@ fun ShiftDetailsScreen(
     val sortedDays = days.sortedWith(compareByDescending { parseStoredDate(it.date) ?: LocalDate.MIN })
 
     fun money(value: Double): String {
-        return String.format(
-            Locale.getDefault(),
-            "%.2f ₽",
-            value
-        )
+        return formatRubles(value)
     }
 
     fun number(value: Double): String {
@@ -195,7 +191,7 @@ fun ShiftDetailsScreen(
         Text("Остаток к получению: ${money(totalIncome - advances - fines)}", style = MaterialTheme.typography.titleMedium)
         ShiftMonthCalendar(shift, days, selected = selectedCalendarDate, onSelect = { selectedCalendarDate = it },
             onEdit = { editDay = it; editError = "" }, onAdd = { addDate = it })
-        ShiftCalendarSummary(shift, days, advances)
+        ShiftCalendarSummary(shift, days)
         MoneyOperationsPanel(shift.id)
         HorizontalDivider()
 

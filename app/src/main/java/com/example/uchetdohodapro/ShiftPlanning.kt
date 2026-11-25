@@ -37,10 +37,10 @@ fun ShiftPlanDialog(title: String, initial: Int?, onDismiss: () -> Unit, onSave:
     val scope = rememberCoroutineScope()
     AlertDialog(onDismissRequest = { if (!busy) onDismiss() }, title = { Text(title) }, text = {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(input, { input = it; error = null }, label = { Text("План рабочих дней") },
+            OutlinedTextField(input, { input = it; error = null }, label = { Text("Ожидаемое количество смен") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true,
                 enabled = !busy, modifier = Modifier.fillMaxWidth())
-            Text("Только рабочие смены. Выходные и паузы не учитываются. Пустое поле — без плана.", style = MaterialTheme.typography.bodySmall)
+            Text("Укажите общее количество рабочих смен за вахту. Выходные и паузы не учитываются. Пустое поле — без плана.", style = MaterialTheme.typography.bodySmall)
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
     }, confirmButton = { TextButton(enabled = !busy, onClick = {
@@ -60,17 +60,24 @@ fun ShiftPlanDialog(title: String, initial: Int?, onDismiss: () -> Unit, onSave:
 }
 
 @Composable
-fun CompactShiftPlan(shift: ShiftEntity, worked: Int) {
-    val context = LocalContext.current
-    val dao = remember(context) { WorkDatabase.getInstance(context).workDao() }
-    var edit by remember(shift.id) { mutableStateOf(false) }
+fun CompactShiftPlan(shift: ShiftEntity, worked: Int, enabled: Boolean = true) {
     val plan = shift.plannedWorkDays
     if (plan != null) {
         Text("Смены: $worked / $plan · Осталось ${(plan - worked).coerceAtLeast(0)}", color = PlanOrange)
         LinearProgressIndicator(progress = { (worked.toDouble() / plan).coerceIn(0.0, 1.0).toFloat() }, modifier = Modifier.fillMaxWidth(), color = PlanOrange, trackColor = PlanTrack)
     }
-    OutlinedButton(onClick = { edit = true }, modifier = Modifier.fillMaxWidth()) {
-        Text(if (plan == null) "Задать план смен" else "Изменить план смен")
+    ShiftPlanEditButton(shift, enabled)
+}
+
+@Composable
+fun ShiftPlanEditButton(shift: ShiftEntity, enabled: Boolean = true) {
+    if (!shift.isActive) return
+    val context = LocalContext.current
+    val dao = remember(context) { WorkDatabase.getInstance(context).workDao() }
+    var edit by remember(shift.id) { mutableStateOf(false) }
+    val plan = shift.plannedWorkDays
+    OutlinedButton(onClick = { edit = true }, enabled = enabled, modifier = Modifier.fillMaxWidth()) {
+        Text(if (plan == null) "Задать количество смен" else "Изменить количество смен")
     }
     if (edit) ShiftPlanDialog("План рабочих дней", plan, { edit = false }) { dao.setShiftPlan(shift.id, it) }
 }
@@ -92,7 +99,7 @@ fun ShiftProgressCard(shift: ShiftEntity, days: List<WorkDayEntity>) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text("Прогресс вахты", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                TextButton(onClick = { edit = true }) { Text("Изменить", color = PlanOrange) }
+                TextButton(onClick = { edit = true }) { Text("Изменить план", color = PlanOrange) }
             }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
