@@ -16,7 +16,6 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
-import java.util.Locale
 import java.util.regex.Pattern
 
 abstract class RegressionBase {
@@ -89,7 +88,7 @@ class UpgradeRegressionTest : RegressionBase() {
         compose.onAllNodes(hasSetTextAction())[0].performScrollTo().performTextReplacement("2026-11-14")
         compose.onAllNodes(hasSetTextAction())[1].performScrollTo().performTextInput("1,5")
         Espresso.closeSoftKeyboard()
-        val preview = String.format(Locale.getDefault(), "%.2f ₽", 3.75)
+        val preview = "3,75 ₽"
         compose.onNodeWithText(preview).performScrollTo().assertIsDisplayed()
         shot("02-comma-preview")
         click("СОХРАНИТЬ РАБОЧИЙ ДЕНЬ")
@@ -146,8 +145,8 @@ class UpgradeRegressionTest : RegressionBase() {
         shot("04-operation-updated")
         compose.onNodeWithText("Статистика").performClick()
         compose.onNodeWithText("2026-10").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText(String.format(Locale.getDefault(), "%.2f ₽", 3.085)).performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Остаток: " + String.format(Locale.getDefault(), "%.2f ₽", 1.25)).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("3,09 ₽").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Остаток: 1,25 ₽").performScrollTo().assertIsDisplayed()
         shot("04-monthly-statistics")
         profile()
         click("Создать резервную копию")
