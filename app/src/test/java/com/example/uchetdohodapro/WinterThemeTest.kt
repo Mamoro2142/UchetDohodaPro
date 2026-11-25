@@ -41,6 +41,24 @@ class WinterThemeTest {
         assertFalse(showWinterHint(true, false))
     }
 
+    @Test fun sharedAppearanceRestoresChoiceAndOneTimeHint() {
+        val appearance = WinterAppearance(context)
+        assertFalse(appearance.enabled)
+        assertFalse(appearance.hintSeen)
+        appearance.toggle()
+        assertTrue(appearance.enabled)
+        assertTrue(appearance.hintSeen)
+        val recreated = WinterAppearance(context)
+        assertTrue(recreated.enabled)
+        assertTrue(recreated.hintSeen)
+        recreated.toggle()
+        assertFalse(recreated.enabled)
+        val reopened = WinterAppearance(context)
+        assertFalse(reopened.enabled)
+        assertTrue(reopened.hintSeen)
+        assertFalse(showWinterHint(reopened.enabled, reopened.hintSeen))
+    }
+
     @Test fun sparklesAreBoundedAndSeamless() {
         for (offset in listOf(0f, 0.19f, 0.38f, 0.57f)) {
             assertEquals(winterSparkle(0f, offset), winterSparkle(1f, offset), 0.00001f)
