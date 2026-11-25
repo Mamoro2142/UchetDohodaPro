@@ -284,6 +284,10 @@ private fun HomeScreen(
     onHistoryClick: () -> Unit
 ) {
     val context = LocalContext.current
+    var winterEnabled by remember(context) { mutableStateOf(WinterPreferences.enabled(context)) }
+    var winterHintSeen by remember(context) { mutableStateOf(WinterPreferences.hintSeen(context)) }
+    val togglePhase = rememberWinterPhase()
+    val winterPhase = if (winterEnabled) togglePhase else null
 
     val dao = remember(context) {
         WorkDatabase.getInstance(context).workDao()
@@ -316,294 +320,266 @@ private fun HomeScreen(
         return formatRubles(value)
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Background)
-            .verticalScroll(rememberScrollState())
-            .padding(
-                horizontal = 20.dp,
-                vertical = 18.dp
-            )
-    ) {
-        Text(
-            "УЧЁТ ДОХОДА",
-            color = Orange,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 2.sp
-        )
-
-        Spacer(Modifier.height(6.dp))
-
-        Text(
-            "Главная",
-            color = MainText,
-            fontSize = 29.sp,
-            fontWeight = FontWeight.Bold
-        )
-
-        Text(
-            "Твой заработок под контролем",
-            color = SecondaryText,
-            fontSize = 14.sp
-        )
-
-        Spacer(Modifier.height(22.dp))
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(22.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = Panel
-            )
-        ) {
-            Column(
-                modifier = Modifier.padding(20.dp)
-            ) {
-                Text(
-                    if (activeShift == null) "НЕТ АКТИВНОЙ ВАХТЫ" else "ЗАРАБОТАНО ЗА ВАХТУ",
-                    color = SecondaryText,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-
-                Spacer(Modifier.height(8.dp))
-
-                Text(
-                    money(totalIncome),
-                    color = Green,
-                    fontSize = 34.sp,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Spacer(Modifier.height(16.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement =
-                        Arrangement.SpaceBetween
-                ) {
-                    MiniValue(
-                        "Начислено",
-                        money(totalIncome),
-                        Green
-                    )
-
-                    MiniValue(
-                        "Авансы",
-                        money(advances),
-                        Orange
-                    )
-
-                    MiniValue(
-                        "Штрафы",
-                        money(fines),
-                        Red
-                    )
-                }
-                Spacer(Modifier.height(10.dp))
-                Text("Остаток к получению: ${money(totalIncome - advances - fines)}", color = MainText)
-            }
-        }
-
-        Spacer(Modifier.height(14.dp))
-        if (activeShift?.plannedWorkDays != null) {
-            ShiftProgressCard(activeShift, currentDays)
-            Spacer(Modifier.height(14.dp))
-        }
-
-        Row(
+    Box(Modifier.fillMaxSize()) {
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(140.dp),
-            horizontalArrangement =
-                Arrangement.spacedBy(12.dp)
+                .fillMaxSize()
+                .background(Background)
+                .verticalScroll(rememberScrollState())
+                .padding(
+                    horizontal = 20.dp,
+                    vertical = 18.dp
+                )
         ) {
-            Card(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight(),
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = PanelLight
-                )
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(10.dp),
-                    horizontalArrangement =
-                        Arrangement.SpaceEvenly,
-                    verticalAlignment =
-                        Alignment.CenterVertically
-                ) {
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        horizontalAlignment =
-                            Alignment.CenterHorizontally,
-                        verticalArrangement =
-                            Arrangement.Center
-                    ) {
-                        Text(
-                            "ВСЕГО ВАХТ",
-                            color = SecondaryText,
-                            fontSize = 10.sp,
-                            lineHeight = 12.sp,
-                            textAlign = TextAlign.Center
-                        )
-
-                        Spacer(Modifier.height(8.dp))
-
-                        Text(
-                            totalShifts.toString(),
-                            color = Orange,
-                            fontSize = 26.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        horizontalAlignment =
-                            Alignment.CenterHorizontally,
-                        verticalArrangement =
-                            Arrangement.Center
-                    ) {
-                        Text(
-                            "РАБОЧИХ ДНЕЙ",
-                            color = SecondaryText,
-                            fontSize = 10.sp,
-                            lineHeight = 12.sp,
-                            textAlign = TextAlign.Center
-                        )
-
-                        Spacer(Modifier.height(8.dp))
-
-                        Text(
-                            totalWorkDays.toString(),
-                            color = Green,
-                            fontSize = 26.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
-
-            Card(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight(),
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = PanelLight
-                )
-            ) {
-                BoxWithConstraints(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(6.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    val textSize = (
-                        maxWidth.value / 8.5f
-                    ).coerceIn(16f, 30f)
-
+            winterPhase?.let { WinterHeader(it) }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
                     Text(
-                        text = "Кадры 24",
+                        "УЧЁТ ДОХОДА",
                         color = Orange,
-                        fontSize = textSize.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        textAlign = TextAlign.Center,
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Ellipsis
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 2.sp
                     )
+                    Spacer(Modifier.height(6.dp))
+                    Text("Главная", color = MainText, fontSize = 29.sp, fontWeight = FontWeight.Bold)
+                    Text("Твой заработок под контролем", color = SecondaryText, fontSize = 14.sp)
+                }
+                WinterToggle(winterEnabled, togglePhase) {
+                    winterEnabled = !winterEnabled
+                    WinterPreferences.setEnabled(context, winterEnabled)
+                    winterHintSeen = true
                 }
             }
-        }
 
-        Spacer(Modifier.height(22.dp))
+            if (showWinterHint(winterEnabled, winterHintSeen)) {
+                Spacer(Modifier.height(4.dp))
+                WinterHint()
+            }
+            Spacer(Modifier.height(22.dp))
 
-        Button(
-            onClick = onAddClick,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp),
-            shape = RoundedCornerShape(16.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Orange,
-                contentColor = Color.Black
-            )
-        ) {
-            Text(
-                "+  Добавить рабочий день",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
-
-        Spacer(Modifier.height(12.dp))
-
-        OutlinedButton(
-            onClick = onHistoryClick,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp),
-            shape = RoundedCornerShape(16.dp)
-        ) {
-            Text(
-                "История рабочих дней",
-                fontSize = 15.sp,
-                color = Orange,
-                fontWeight = FontWeight.SemiBold
-            )
-        }
-
-        Spacer(Modifier.height(20.dp))
-
-        Text(
-            "ПОСЛЕДНИЕ ЗАПИСИ",
-            color = SecondaryText,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.sp
-        )
-
-        Spacer(Modifier.height(10.dp))
-
-        if (recentDays.isEmpty()) {
             Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth().winterCard(winterPhase),
+                shape = RoundedCornerShape(22.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = Panel
                 )
             ) {
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(18.dp),
-                    horizontalAlignment =
-                        Alignment.CenterHorizontally
+                    modifier = Modifier.padding(20.dp)
                 ) {
                     Text(
-                        "Пока нет записей",
-                        color = MainText,
-                        fontSize = 16.sp
+                        if (activeShift == null) "НЕТ АКТИВНОЙ ВАХТЫ" else "ЗАРАБОТАНО ЗА ВАХТУ",
+                        color = SecondaryText,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
                     )
 
-                    Spacer(Modifier.height(5.dp))
+                    Spacer(Modifier.height(8.dp))
 
                     Text(
-                        "Добавленные рабочие дни появятся здесь",
-                        color = SecondaryText,
-                        fontSize = 12.sp
+                        money(totalIncome),
+                        color = Green,
+                        fontSize = 34.sp,
+                        fontWeight = FontWeight.Bold
                     )
+
+                    Spacer(Modifier.height(16.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement =
+                            Arrangement.SpaceBetween
+                    ) {
+                        MiniValue(
+                            "Начислено",
+                            money(totalIncome),
+                            Green
+                        )
+
+                        MiniValue(
+                            "Авансы",
+                            money(advances),
+                            Orange
+                        )
+
+                        MiniValue(
+                            "Штрафы",
+                            money(fines),
+                            Red
+                        )
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Text("Остаток к получению: ${money(totalIncome - advances - fines)}", color = MainText)
                 }
             }
-        } else {
-            recentDays.forEach { day ->
+
+            Spacer(Modifier.height(14.dp))
+            if (activeShift?.plannedWorkDays != null) {
+                ShiftProgressCard(activeShift, currentDays, winterPhase)
+                Spacer(Modifier.height(14.dp))
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(140.dp),
+                horizontalArrangement =
+                    Arrangement.spacedBy(12.dp)
+            ) {
+                Card(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = PanelLight
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(10.dp),
+                        horizontalArrangement =
+                            Arrangement.SpaceEvenly,
+                        verticalAlignment =
+                            Alignment.CenterVertically
+                    ) {
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            horizontalAlignment =
+                                Alignment.CenterHorizontally,
+                            verticalArrangement =
+                                Arrangement.Center
+                        ) {
+                            Text(
+                                "ВСЕГО ВАХТ",
+                                color = SecondaryText,
+                                fontSize = 10.sp,
+                                lineHeight = 12.sp,
+                                textAlign = TextAlign.Center
+                            )
+
+                            Spacer(Modifier.height(8.dp))
+
+                            Text(
+                                totalShifts.toString(),
+                                color = Orange,
+                                fontSize = 26.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            horizontalAlignment =
+                                Alignment.CenterHorizontally,
+                            verticalArrangement =
+                                Arrangement.Center
+                        ) {
+                            Text(
+                                "РАБОЧИХ ДНЕЙ",
+                                color = SecondaryText,
+                                fontSize = 10.sp,
+                                lineHeight = 12.sp,
+                                textAlign = TextAlign.Center
+                            )
+
+                            Spacer(Modifier.height(8.dp))
+
+                            Text(
+                                totalWorkDays.toString(),
+                                color = Green,
+                                fontSize = 26.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+
+                Card(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = PanelLight
+                    )
+                ) {
+                    BoxWithConstraints(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        val textSize = (
+                            maxWidth.value / 8.5f
+                        ).coerceIn(16f, 30f)
+
+                        Text(
+                            text = "Кадры 24",
+                            color = Orange,
+                            fontSize = textSize.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(22.dp))
+
+            Button(
+                onClick = onAddClick,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Orange,
+                    contentColor = Color.Black
+                )
+            ) {
+                Text(
+                    "+  Добавить рабочий день",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            OutlinedButton(
+                onClick = onHistoryClick,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Text(
+                    "История рабочих дней",
+                    fontSize = 15.sp,
+                    color = Orange,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            Spacer(Modifier.height(20.dp))
+
+            Text(
+                "ПОСЛЕДНИЕ ЗАПИСИ",
+                color = SecondaryText,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp
+            )
+
+            Spacer(Modifier.height(10.dp))
+
+            if (recentDays.isEmpty()) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
@@ -611,35 +587,68 @@ private fun HomeScreen(
                         containerColor = Panel
                     )
                 ) {
-                    Row(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(18.dp),
-                        horizontalArrangement =
-                            Arrangement.SpaceBetween,
-                        verticalAlignment =
-                            Alignment.CenterVertically
+                        horizontalAlignment =
+                            Alignment.CenterHorizontally
                     ) {
                         Text(
-                            day.date,
+                            "Пока нет записей",
                             color = MainText,
-                            fontSize = 15.sp,
-                            fontWeight =
-                                FontWeight.SemiBold
+                            fontSize = 16.sp
                         )
 
+                        Spacer(Modifier.height(5.dp))
+
                         Text(
-                            money(day.calculateIncome()),
-                            color = Green,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold
+                            "Добавленные рабочие дни появятся здесь",
+                            color = SecondaryText,
+                            fontSize = 12.sp
                         )
                     }
                 }
+            } else {
+                recentDays.forEach { day ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = Panel
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(18.dp),
+                            horizontalArrangement =
+                                Arrangement.SpaceBetween,
+                            verticalAlignment =
+                                Alignment.CenterVertically
+                        ) {
+                            Text(
+                                day.date,
+                                color = MainText,
+                                fontSize = 15.sp,
+                                fontWeight =
+                                    FontWeight.SemiBold
+                            )
 
-                Spacer(Modifier.height(10.dp))
+                            Text(
+                                money(day.calculateIncome()),
+                                color = Green,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(10.dp))
+                }
             }
         }
+        if (winterPhase != null) WinterEdgeSnow(winterPhase, Modifier.matchParentSize())
     }
 }
 

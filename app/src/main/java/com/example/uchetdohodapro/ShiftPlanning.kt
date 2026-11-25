@@ -83,7 +83,7 @@ fun ShiftPlanEditButton(shift: ShiftEntity, enabled: Boolean = true) {
 }
 
 @Composable
-fun ShiftProgressCard(shift: ShiftEntity, days: List<WorkDayEntity>) {
+fun ShiftProgressCard(shift: ShiftEntity, days: List<WorkDayEntity>, winterPhase: State<Float>? = null) {
     val plan = shift.plannedWorkDays ?: return
     if (plan <= 0) return
     val context = LocalContext.current
@@ -94,7 +94,7 @@ fun ShiftProgressCard(shift: ShiftEntity, days: List<WorkDayEntity>) {
     val count = model.workCount
     val fraction = (count.toDouble() / plan).coerceIn(0.0, 1.0).toFloat()
     var edit by remember(shift.id) { mutableStateOf(false) }
-    Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp),
+    Card(modifier = Modifier.fillMaxWidth().winterCard(winterPhase), shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF1C2023))) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -112,7 +112,15 @@ fun ShiftProgressCard(shift: ShiftEntity, days: List<WorkDayEntity>) {
                         val stroke = 9.dp.toPx(); val margin = stroke / 2
                         val arcSize = Size(size.width - stroke, size.height - stroke)
                         drawArc(PlanTrack, -90f, 360f, false, Offset(margin, margin), arcSize, style = Stroke(stroke))
-                        if (fraction > 0) drawArc(PlanOrange, -90f, fraction * 360f, false, Offset(margin, margin), arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
+                        if (fraction > 0) {
+                            if (winterPhase != null) {
+                                val glow = winterPulse(winterPhase.value, 2)
+                                // Wider, translucent strokes create a warm glow without changing the count.
+                                drawArc(PlanOrange.copy(alpha = 0.10f + 0.10f * glow), -90f, fraction * 360f, false, Offset(margin, margin), arcSize, style = Stroke(stroke + 5.dp.toPx(), cap = StrokeCap.Round))
+                                drawArc(PlanOrange.copy(alpha = 0.14f + 0.10f * glow), -90f, fraction * 360f, false, Offset(margin, margin), arcSize, style = Stroke(stroke + 2.dp.toPx(), cap = StrokeCap.Round))
+                            }
+                            drawArc(PlanOrange, -90f, fraction * 360f, false, Offset(margin, margin), arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
+                        }
                     }
                     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(10.dp)) {
                         Text("$count/$plan", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 2)
@@ -124,7 +132,7 @@ fun ShiftProgressCard(shift: ShiftEntity, days: List<WorkDayEntity>) {
             val segments = plan.coerceAtMost(30)
             val filled = if (plan <= 30) count.coerceAtMost(plan) else (fraction * segments).toInt()
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                repeat(segments) { i -> Box(Modifier.weight(1f).height(14.dp).background(if (i < filled) PlanOrange else PlanTrack, RoundedCornerShape(3.dp))) }
+                repeat(segments) { i -> Box(Modifier.weight(1f).height(14.dp).background(if (i < filled) PlanOrange else PlanTrack, RoundedCornerShape(3.dp)).winterSegment(winterPhase, i, i < filled)) }
             }
             HorizontalDivider()
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
