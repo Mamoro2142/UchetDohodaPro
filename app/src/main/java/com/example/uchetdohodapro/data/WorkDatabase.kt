@@ -35,6 +35,17 @@ data class TariffEntity(
     val savedAt: Long? = null
 )
 
+@Entity(tableName = "tariff_history")
+data class TariffHistoryEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val picksRate: Double, val weightRate: Double, val volumeRate: Double,
+    val boxesRate: Double, val hoursRate: Double, val savedAt: Long?
+) {
+    fun rates() = listOf(picksRate, weightRate, volumeRate, boxesRate, hoursRate)
+}
+
+fun TariffEntity.rates() = listOf(picksRate, weightRate, volumeRate, boxesRate, hoursRate)
+
 @Entity(tableName = "work_days")
 data class WorkDayEntity(
     @PrimaryKey(autoGenerate = true)
@@ -239,11 +250,28 @@ interface WorkDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun saveTariffsRaw(tariffs: TariffEntity)
 
+    @Query("SELECT * FROM tariff_history ORDER BY id DESC")
+    fun observeTariffHistory(): Flow<List<TariffHistoryEntity>>
+    @Query("SELECT * FROM tariff_history ORDER BY id")
+    suspend fun backupTariffHistory(): List<TariffHistoryEntity>
+    @Insert
+    suspend fun insertTariffHistory(entry: TariffHistoryEntity)
+    @Insert
+    suspend fun restoreTariffHistory(entries: List<TariffHistoryEntity>)
+    @Query("DELETE FROM tariff_history")
+    suspend fun clearTariffHistory()
+
     @Transaction
     suspend fun saveTariffs(tariffs: TariffEntity) {
         require(tariffs.id == 1 && listOf(tariffs.picksRate, tariffs.weightRate, tariffs.volumeRate, tariffs.boxesRate, tariffs.hoursRate)
             .all { it.isFinite() && it >= 0 }) { "Тарифы должны быть конечными числами не меньше нуля" }
         require(tariffs.savedAt == null || tariffs.savedAt > 0) { "Неверная дата сохранения" }
+        val previous = backupTariffs().singleOrNull()
+        if (previous != null && previous.rates() != tariffs.rates()) {
+            insertTariffHistory(TariffHistoryEntity(picksRate = previous.picksRate,
+                weightRate = previous.weightRate, volumeRate = previous.volumeRate,
+                boxesRate = previous.boxesRate, hoursRate = previous.hoursRate, savedAt = previous.savedAt))
+        }
         saveTariffsRaw(tariffs)
     }
 
@@ -434,9 +462,10 @@ interface WorkDao {
         WorkDayEntity::class,
         ShiftEntity::class,
         MoneyOperationEntity::class,
-        ShiftPauseEntity::class
+        ShiftPauseEntity::class,
+        TariffHistoryEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 abstract class WorkDatabase : RoomDatabase() {
@@ -505,6 +534,12 @@ abstract class WorkDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `tariff_history` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `picksRate` REAL NOT NULL, `weightRate` REAL NOT NULL, `volumeRate` REAL NOT NULL, `boxesRate` REAL NOT NULL, `hoursRate` REAL NOT NULL, `savedAt` INTEGER)")
+            }
+        }
+
         fun getInstance(context: Context): WorkDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -516,7 +551,7 @@ abstract class WorkDatabase : RoomDatabase() {
                         MIGRATION_1_2,
                         MIGRATION_2_3,
                         MIGRATION_3_4,
-                        MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7
+                        MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8
                     )
                     .build()
                     .also { INSTANCE = it }
