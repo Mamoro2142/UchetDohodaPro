@@ -100,7 +100,7 @@ class BackupTest {
                 old.version = version
             }
             val db = Room.databaseBuilder(context, WorkDatabase::class.java, name)
-                .addMigrations(WorkDatabase.MIGRATION_1_2, WorkDatabase.MIGRATION_2_3, WorkDatabase.MIGRATION_3_4, WorkDatabase.MIGRATION_4_5, WorkDatabase.MIGRATION_5_6, WorkDatabase.MIGRATION_6_7).build()
+                .addMigrations(WorkDatabase.MIGRATION_1_2, WorkDatabase.MIGRATION_2_3, WorkDatabase.MIGRATION_3_4, WorkDatabase.MIGRATION_4_5, WorkDatabase.MIGRATION_5_6, WorkDatabase.MIGRATION_6_7, WorkDatabase.MIGRATION_7_8).build()
             try {
                 val dao = db.workDao()
                 assertNull(dao.backupTariffs().single().savedAt)
@@ -409,7 +409,7 @@ class BackupTest {
             old.execSQL("INSERT INTO shift_pauses VALUES (1,9,'2026-10-25','2026-10-27')")
             old.version = 6
         }
-        val db = Room.databaseBuilder(context, WorkDatabase::class.java, name).addMigrations(WorkDatabase.MIGRATION_6_7).build()
+        val db = Room.databaseBuilder(context, WorkDatabase::class.java, name).addMigrations(WorkDatabase.MIGRATION_6_7, WorkDatabase.MIGRATION_7_8).build()
         try {
             val dao = db.workDao()
             assertNull(dao.getShift(9)!!.plannedWorkDays)
@@ -420,4 +420,30 @@ class BackupTest {
             assertEquals(15, dao.getShift(9)!!.plannedWorkDays)
         } finally { db.close(); context.deleteDatabase(name) }
     }
+    @Test fun tariffHistoryIsAtomicAndRestoresWithoutDuplicates() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), WorkDatabase::class.java).build()
+        try {
+            val dao = db.workDao()
+            dao.saveTariffs(TariffEntity(picksRate = 1.25))
+            dao.saveTariffs(TariffEntity(picksRate = 2.0, savedAt = 100L))
+            dao.saveTariffs(TariffEntity(picksRate = 2.0, savedAt = 101L))
+            dao.saveTariffs(TariffEntity(picksRate = 3.0, savedAt = 200L))
+            val history = dao.backupTariffHistory()
+            assertEquals(listOf(1.25, 2.0), history.map { it.picksRate })
+            assertNull(history.first().savedAt)
+            assertEquals(101L, history.last().savedAt)
+            val repo = BackupRepository(db)
+            val encoded = repo.export()
+            val data = BackupFormat.decode(encoded)
+            assertEquals(history, data.tariffHistory)
+            repo.restore(data); repo.restore(data)
+            assertEquals(data, BackupFormat.decode(repo.export()))
+            val legacy = JSONObject(encoded)
+            val body = JSONObject(legacy.getString("payload")).apply { remove("tariffHistory") }.toString()
+            val hash = java.security.MessageDigest.getInstance("SHA-256").digest(body.toByteArray()).joinToString("") { "%02x".format(it) }
+            legacy.put("payload", body).put("sha256", hash).put("formatVersion", 5)
+            assertEquals(data.copy(tariffHistory = emptyList()), BackupFormat.decode(legacy.toString()))
+        } finally { db.close() }
+    }
+
 }
