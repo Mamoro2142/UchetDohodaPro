@@ -158,7 +158,7 @@ class UpgradeRegressionTest : RegressionBase() {
         shot("04-operation-updated")
         compose.onNodeWithText("Статистика").performClick()
         compose.onNodeWithText("2026-10").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("3,09 ₽").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("monthly-income-2026-10").performScrollTo().assertIsDisplayed().assertTextEquals("3,09 ₽")
         compose.onNodeWithText("Остаток: 1,25 ₽").performScrollTo().assertIsDisplayed()
         shot("04-monthly-statistics")
         profile()
