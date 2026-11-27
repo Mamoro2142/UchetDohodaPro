@@ -18,6 +18,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -116,12 +117,7 @@ fun StatisticsScreen() {
 
                 Spacer(Modifier.height(8.dp))
 
-                Text(
-                    statsMoney(totalIncome),
-                    color = StatsGreen,
-                    fontSize = 32.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                AnimatedMoney(statsMoney(totalIncome), color = StatsGreen, fontSize = 32.sp, counter = "statistics")
                 Text("Авансы: ${statsMoney(advances)}")
                 Text("Штрафы: ${statsMoney(fines)}")
                 Text("Остаток к получению: ${statsMoney(totalIncome - advances - fines)}")
@@ -189,6 +185,9 @@ fun StatisticsScreen() {
 
         Spacer(Modifier.height(24.dp))
 
+        RecordsPanel(data)
+        Spacer(Modifier.height(24.dp))
+
         Text(
             "ДОХОД ПО МЕСЯЦАМ",
             color = StatsSecondary,
@@ -236,6 +235,7 @@ fun StatisticsScreen() {
 
                             Text(
                                 statsMoney(income),
+                                modifier = Modifier.testTag("monthly-income-$month"),
                                 color = StatsGreen,
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold

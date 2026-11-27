@@ -53,7 +53,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = Background
                 ) {
-                    IncomeDataHost { WinterThemeHost { IncomeApp() } }
+                    IncomeDataHost { MoneyAnimationHost { WinterThemeHost { IncomeApp() } } }
                 }
             }
         }
@@ -364,12 +364,7 @@ private fun HomeScreen(
 
                     Spacer(Modifier.height(8.dp))
 
-                    Text(
-                        money(totalIncome),
-                        color = Green,
-                        fontSize = 34.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    AnimatedMoney(money(totalIncome), color = Green, fontSize = 34.sp, counter = "home")
 
                     Spacer(Modifier.height(16.dp))
 

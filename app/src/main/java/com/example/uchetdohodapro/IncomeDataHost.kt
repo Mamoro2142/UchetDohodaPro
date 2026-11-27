@@ -13,8 +13,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.uchetdohodapro.data.IncomeSnapshot
 import com.example.uchetdohodapro.data.WorkDatabase
 import com.example.uchetdohodapro.data.observeIncomeSnapshots
+import com.example.uchetdohodapro.data.isNewRecord
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
@@ -32,6 +35,8 @@ internal class IncomeDataViewModel(application: Application) : AndroidViewModel(
     private val _state = MutableStateFlow<IncomeLoadState>(IncomeLoadState.Loading)
     val state = _state.asStateFlow()
     private var observation: Job? = null
+    private val _recordEvent = MutableStateFlow(0L)
+    val recordEvent = _recordEvent.asStateFlow()
 
     init { reload() }
 
@@ -41,7 +46,10 @@ internal class IncomeDataViewModel(application: Application) : AndroidViewModel(
         observation = viewModelScope.launch {
             try {
                 dao.observeIncomeSnapshots().collect { snapshot ->
+                    val previous = (_state.value as? IncomeLoadState.Ready)?.data
                     _state.value = IncomeLoadState.Ready(snapshot)
+                    if (previous != null && snapshot.days.size == previous.days.size + 1 &&
+                        withContext(Dispatchers.Default) { isNewRecord(previous, snapshot) }) _recordEvent.value++
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -62,7 +70,11 @@ internal fun IncomeDataHost(content: @Composable () -> Unit) {
     val state by model.state.collectAsState()
     when (val current = state) {
         is IncomeLoadState.Ready -> CompositionLocalProvider(LocalIncomeSnapshot provides current.data) {
-            content()
+            val event by model.recordEvent.collectAsState()
+            Box(Modifier.fillMaxSize()) {
+                content()
+                RecordCelebration(event, Modifier.matchParentSize())
+            }
         }
         IncomeLoadState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {

@@ -222,6 +222,7 @@ fun ShiftScreen(
                                                     isActive = false
                                                 )
                                             )
+                                            runCatching { AutoBackup.afterShift(context) }
                                         } catch (e: Exception) {
                                             operationError =
                                                 e.message ?: "Не удалось завершить вахту."
@@ -629,6 +630,7 @@ fun ShiftScreen(
                                             )
                                         )
 
+                                        if (shift.isActive && endDate.isNotBlank()) runCatching { AutoBackup.afterShift(context) }
                                         editingShift = null
                                         operationError = null
                                     } catch (e: Exception) {

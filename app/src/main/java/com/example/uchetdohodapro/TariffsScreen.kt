@@ -75,6 +75,8 @@ fun TariffsScreen(
     val model: TariffViewModel = viewModel(factory = factory)
     val loadedTariffs by model.tariffs.collectAsState()
     val tariffs = loadedTariffs?.value
+    val historyFlow = remember(database) { database.workDao().observeTariffHistory() }
+    val history by historyFlow.collectAsState(initial = emptyList())
 
     var picks by rememberSaveable { mutableStateOf("") }
     var weight by rememberSaveable { mutableStateOf("") }
@@ -241,6 +243,7 @@ Spacer(Modifier.height(18.dp))
         }
 
         Spacer(Modifier.height(24.dp))
+        TariffHistoryPanel(tariffs, history)
     }
 }
 

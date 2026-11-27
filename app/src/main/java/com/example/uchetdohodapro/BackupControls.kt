@@ -71,7 +71,7 @@ fun BackupControls() {
             } finally { busy = false }
         }
     }
-    Text("Все рабочие дни, их тарифы, текущие тарифы, вахты, план рабочих дней, паузы, авансы и штрафы сохраняются в файл.", style = MaterialTheme.typography.bodySmall)
+    Text("Все рабочие дни, их тарифы, текущие тарифы, история тарифов, вахты, план рабочих дней, паузы, авансы и штрафы сохраняются в файл.", style = MaterialTheme.typography.bodySmall)
     Spacer(Modifier.height(8.dp))
     Button(enabled = !busy && candidate == null, modifier = Modifier.fillMaxWidth(), onClick = {
         busy = true
@@ -95,6 +95,8 @@ fun BackupControls() {
     }) { Text("Восстановить из файла") }
     if (busy) Text("Подождите…")
     if (message.isNotBlank()) Text(message, style = MaterialTheme.typography.bodySmall)
+
+    AutoBackupControls()
 
     candidate?.let { snapshot ->
         AlertDialog(
