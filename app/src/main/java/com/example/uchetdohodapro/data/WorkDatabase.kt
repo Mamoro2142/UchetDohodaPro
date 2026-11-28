@@ -314,6 +314,18 @@ interface WorkDao {
         saveGroupRaw(updated)
     }
 
+    /** Append against the latest saved group, rather than overwriting with a UI snapshot. */
+    @Transaction
+    suspend fun addGroupMetric(groupId: Long, name: String, rate: Double) {
+        val group = availableGroups(backupTariffs().singleOrNull(), backupGroups()).firstOrNull { it.id == groupId }
+            ?: error("Группа не найдена")
+        val cleanName = name.trim()
+        require(cleanName.length in 1..80) { "Укажите название показателя (до 80 символов)" }
+        require(rate.isFinite() && rate >= 0) { "Укажите корректный тариф" }
+        require(group.definitions().none { it.name.trim().equals(cleanName, ignoreCase = true) }) { "Показатель с таким названием уже существует" }
+        saveGroup(group.withAddedMetric(cleanName, rate))
+    }
+
     @Query("SELECT * FROM work_days ORDER BY date DESC, id DESC")
     fun observeWorkDays(): Flow<List<WorkDayEntity>>
 

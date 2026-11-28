@@ -66,6 +66,8 @@ internal fun readDefinitions(mask: Int, array: JSONArray): List<MetricDefinition
 internal fun WorkGroupEntity.withBaseRates(rates: List<Double>): String = if (JSONArray(ratesJson).length() == 5) writeRates(rates) else
     writeDefinitions(definitions().map { d -> baseIndex(d.id)?.let { d.copy(rate = rates[it]) } ?: d }, rates)
 internal fun WorkGroupEntity.withDefinitions(defs: List<MetricDefinition>) = copy(mask = definitionMask(defs), ratesJson = writeDefinitions(defs, rates()))
+internal fun WorkGroupEntity.withAddedMetric(name: String, rate: Double): WorkGroupEntity =
+    withDefinitions(definitions() + MetricDefinition("custom:" + java.util.UUID.randomUUID(), name.trim(), rate))
 internal fun defaultGroup(tariffs: TariffEntity?, stored: WorkGroupEntity? = null): WorkGroupEntity =
     (stored ?: WorkGroupEntity(1, "Раздел", 31, writeRates(List(5) { 0.0 }), null)).copy(
         ratesJson = stored?.withBaseRates(tariffs?.rates() ?: stored.rates()) ?: writeRates(tariffs?.rates() ?: List(5) { 0.0 }), savedAt = tariffs?.savedAt)
