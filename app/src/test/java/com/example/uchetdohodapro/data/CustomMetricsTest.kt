@@ -63,4 +63,31 @@ class CustomMetricsTest {
             assertEquals(2, dao.backupGroups().single().definitions().size)
         } finally { db.close() }
     }
+    @Test fun directAddTariffPreservesExistingRatesAndHistoricalDay() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), WorkDatabase::class.java).build()
+        try {
+            val dao = db.workDao()
+            dao.saveTariffs(TariffEntity(picksRate = 2.4))
+            val before = availableGroups(dao.backupTariffs().singleOrNull(), dao.backupGroups()).single()
+            val oldDay = withDayGroups(WorkDayEntity(date = "2026-11-28"), listOf(before.newDayGroup().let { g ->
+                g.withMeasurements(g.entries().map { if (it.definition.id == "base:0") it.copy(value = 100.0) else it })
+            }))
+            val dayId = dao.insertWorkDay(oldDay)
+            dao.addGroupMetric(1L, " Пики 2 ", 3.2)
+            dao.addGroupMetric(1L, "Пики 3", 4.1)
+            val after = dao.backupGroups().single()
+            assertEquals(before.definitions(), after.definitions().dropLast(2))
+            assertEquals(listOf("Пики 2", "Пики 3"), after.definitions().takeLast(2).map { it.name })
+            assertEquals(listOf(3.2, 4.1), after.definitions().takeLast(2).map { it.rate })
+            assertEquals(2, after.history().size)
+            assertEquals(240.0, dao.getWorkDay(dayId)!!.calculateIncome(), 0.00001)
+            assertTrue(runCatching { dao.addGroupMetric(1L, "пики 2", 9.0) }.isFailure)
+            assertTrue(runCatching { dao.addGroupMetric(1L, "Неверная ставка", -1.0) }.isFailure)
+            assertEquals(after, dao.backupGroups().single())
+            val backup = BackupFormat.decode(BackupRepository(db).export())
+            BackupRepository(db).restore(backup)
+            assertEquals(after, dao.backupGroups().single())
+        } finally { db.close() }
+    }
+
 }
