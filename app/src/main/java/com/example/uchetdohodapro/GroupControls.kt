@@ -1,6 +1,8 @@
 package com.example.uchetdohodapro
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.foundation.rememberScrollState
@@ -48,6 +50,7 @@ internal fun GroupSettingsPanel() {
     val dao = remember(context) { WorkDatabase.getInstance(context).workDao() }
     val scope = rememberCoroutineScope()
     var editing by remember { mutableStateOf<WorkGroupEntity?>(null) }
+    var addingTariff by remember { mutableStateOf<WorkGroupEntity?>(null) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf("") }
     var expandedHistory by remember { mutableStateOf<Set<Long>>(emptySet()) }
@@ -64,6 +67,13 @@ internal fun GroupSettingsPanel() {
                 }
                 Text(group.savedAt?.let { "Последнее сохранение: " + SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date(it)) } ?: "Дата сохранения пока не указана", style = MaterialTheme.typography.bodySmall)
                 OutlinedButton(onClick = { error = ""; editing = group }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Редактировать группу") }
+                OutlinedButton(
+                    onClick = { error = ""; addingTariff = group },
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth(),
+                    border = BorderStroke(1.dp, groupOrange),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = groupOrange)
+                ) { Text("+ Добавить тариф", fontWeight = FontWeight.Medium) }
                 val history = group.history().asReversed()
                 if (history.isNotEmpty()) {
                     TextButton(onClick = { expandedHistory = if (group.id in expandedHistory) expandedHistory - group.id else expandedHistory + group.id }) { Text("История группы · ${history.size}") }
@@ -84,6 +94,19 @@ internal fun GroupSettingsPanel() {
         }
     } }
     OutlinedButton(onClick = { error = ""; editing = WorkGroupEntity(0, "", 1, writeRates(List(5) { 0.0 }), null) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("+ Создать группу") }
+    addingTariff?.let { group -> key(group.id) {
+        AddTariffDialog(group, busy, error, onDismiss = { if (!busy) addingTariff = null }, onSave = { name, rate ->
+            if (!busy) {
+                busy = true; error = ""
+                scope.launch {
+                    try { dao.addGroupMetric(group.id, name, rate); addingTariff = null }
+                    catch (e: CancellationException) { throw e }
+                    catch (e: Exception) { error = e.message ?: "Не удалось добавить тариф" }
+                    finally { busy = false }
+                }
+            }
+        })
+    } }
     editing?.let { group -> key(group.id) {
         GroupEditorDialog(group, busy, error, onDismiss = { if (!busy) editing = null }, onSave = { updated ->
             if (!busy) {
@@ -97,6 +120,72 @@ internal fun GroupSettingsPanel() {
             }
         })
     } }
+}
+
+/** Direct entry for a new tariff without opening or rewriting the existing group editor. */
+@Composable
+private fun AddTariffDialog(
+    group: WorkGroupEntity,
+    busy: Boolean,
+    error: String,
+    onDismiss: () -> Unit,
+    onSave: (String, Double) -> Unit
+) {
+    var name by remember { mutableStateOf("") }
+    var rate by remember { mutableStateOf("") }
+    val cleanName = name.trim()
+    val parsedRate = parseNonNegativeNumber(rate)
+    val duplicate = group.definitions().any { it.name.trim().equals(cleanName, ignoreCase = true) }
+    val valid = cleanName.length in 1..80 && !duplicate && parsedRate != null
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(24.dp),
+        title = { Text("Новый тариф", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Surface(color = groupOrange.copy(alpha = 0.10f), shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("РАБОЧАЯ ГРУППА", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
+                        Text(group.name, color = groupOrange, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    }
+                }
+                OutlinedTextField(
+                    value = name, onValueChange = { name = it },
+                    label = { Text("Название показателя") }, placeholder = { Text("Например, Пики 2") },
+                    singleLine = true, enabled = !busy, isError = duplicate || cleanName.length > 80,
+                    modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)
+                )
+                if (duplicate) Text("Показатель с таким названием уже существует", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                if (cleanName.length > 80) Text("Не более 80 символов", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                OutlinedTextField(
+                    value = rate, onValueChange = { rate = it }, label = { Text("Ставка за единицу") },
+                    placeholder = { Text("0,00") }, suffix = { Text("₽") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    singleLine = true, enabled = !busy, isError = rate.isNotBlank() && parsedRate == null,
+                    modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)
+                )
+                if (rate.isNotBlank() && parsedRate == null) Text("Введите корректную неотрицательную ставку", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("ПРЕДПРОСМОТР", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text(cleanName.ifBlank { "Новый показатель" }, modifier = Modifier.weight(1f))
+                            Text(parsedRate?.let { formatRubles(it) } ?: "—", color = groupGreen, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+                Text("Новый тариф будет доступен для следующих рабочих дней. Старые начисления не изменятся.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            }
+        },
+        confirmButton = {
+            Button(enabled = valid && !busy, onClick = { parsedRate?.let { onSave(cleanName, it) } },
+                colors = ButtonDefaults.buttonColors(containerColor = groupOrange, contentColor = Color(0xFF131416))) {
+                Text(if (busy) "Сохранение…" else "Добавить тариф")
+            }
+        },
+        dismissButton = { TextButton(enabled = !busy, onClick = onDismiss) { Text("Отмена") } }
+    )
 }
 
 private data class MetricEditorRow(val id: String, val name: String, val rate: String)

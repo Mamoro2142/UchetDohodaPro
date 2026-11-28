@@ -34,6 +34,11 @@ internal data class UpdateRelease(val version: String, val title: String, val ch
 
 // Keep this list in sync with docs/CHANGELOG.md when publishing a release.
 internal val updateReleases = listOf(
+    UpdateRelease("1.1.15", "Быстрое добавление тарифов", listOf(
+        "Кнопка добавления тарифа непосредственно в карточке каждой группы.",
+        "Компактное окно создания с названием, ставкой и предпросмотром.",
+        "Проверка дублирующихся названий и сохранение действующих и исторических ставок."
+    )),
     UpdateRelease("1.1.14", "Произвольные показатели", listOf(
         "Добавление нескольких показателей одного типа с разными тарифами.",
         "Переименование, удаление и изменение порядка показателей в группе.",
