@@ -15,7 +15,8 @@ data class BackupSnapshot(
     val shifts: List<ShiftEntity>,
     val operations: List<MoneyOperationEntity> = emptyList(),
     val pauses: List<ShiftPauseEntity> = emptyList(),
-    val tariffHistory: List<TariffHistoryEntity> = emptyList()
+    val tariffHistory: List<TariffHistoryEntity> = emptyList(),
+    val groups: List<WorkGroupEntity> = emptyList()
 )
 
 object BackupFormat {
@@ -38,9 +39,13 @@ object BackupFormat {
                     t.rates().forEachIndexed { i, v -> put(metrics[i] + "Rate", v) }
                 })
             } })
+            put("groups", JSONArray().apply { snapshot.groups.forEach { g ->
+                put(JSONObject().put("id", g.id).put("name", g.name).put("mask", g.mask).put("rates", JSONArray(g.ratesJson))
+                    .put("savedAt", g.savedAt ?: JSONObject.NULL).put("history", JSONArray(g.historyJson)))
+            } })
             put("days", JSONArray().apply { snapshot.days.forEach { d ->
                 put(JSONObject().put("id", d.id).put("date", d.date)
-                    .put("shiftId", d.shiftId ?: JSONObject.NULL).apply {
+                    .put("shiftId", d.shiftId ?: JSONObject.NULL).put("groups", d.groupsJson?.let { JSONArray(it) } ?: JSONObject.NULL).apply {
                         listOf(d.picks, d.weight, d.volume, d.boxes, d.hours)
                             .forEachIndexed { i, v -> put(metrics[i], v ?: JSONObject.NULL) }
                         listOf(d.picksRate, d.weightRate, d.volumeRate, d.boxesRate, d.hoursRate)
@@ -59,7 +64,7 @@ object BackupFormat {
             } })
         }.toString()
         return JSONObject().put("applicationId", "com.example.uchetdohodapro")
-            .put("formatVersion", 6).put("payload", payload).put("sha256", digest(payload))
+            .put("formatVersion", 7).put("payload", payload).put("sha256", digest(payload))
             .toString().also { require(it.toByteArray(Charsets.UTF_8).size <= MAX_BYTES) { "Слишком большая копия" } }
     }
 
@@ -68,7 +73,7 @@ object BackupFormat {
         val envelope = JSONObject(text)
         require(envelope.getString("applicationId") == "com.example.uchetdohodapro") { "Файл другого приложения" }
         val version = envelope.get("formatVersion")
-        require(version == 1 || version == 2 || version == 3 || version == 4 || version == 5 || version == 6) { "Неподдерживаемая версия резервной копии" }
+        require(version == 1 || version == 2 || version == 3 || version == 4 || version == 5 || version == 6 || version == 7) { "Неподдерживаемая версия резервной копии" }
         val payload = envelope.getString("payload")
         require(digest(payload) == envelope.getString("sha256")) { "Нарушена целостность файла" }
         val json = JSONObject(payload)
@@ -98,13 +103,14 @@ object BackupFormat {
                 volume = d.nullableNumber("volume"), boxes = d.nullableNumber("boxes"), hours = d.nullableNumber("hours"),
                 picksRate = d.number("picksRate"), weightRate = d.number("weightRate"),
                 volumeRate = d.number("volumeRate"), boxesRate = d.number("boxesRate"), hoursRate = d.number("hoursRate"),
-                shiftId = if (d.get("shiftId") == JSONObject.NULL) null else d.id("shiftId")
+                shiftId = if (d.get("shiftId") == JSONObject.NULL) null else d.id("shiftId"),
+                groupsJson = if (version == 7 && !d.isNull("groups")) d.getJSONArray("groups").toString() else null
             ) },
             objects("shifts").map { s ->
                 require(s.get("isActive") is Boolean)
                 ShiftEntity(s.id("id"), s.getString("startDate"),
                     if (s.get("endDate") == JSONObject.NULL) null else s.getString("endDate"), s.getBoolean("isActive"),
-                    if ((version != 5 && version != 6) || s.get("plannedWorkDays") == JSONObject.NULL) null else {
+                    if ((version != 5 && version != 6 && version != 7) || s.get("plannedWorkDays") == JSONObject.NULL) null else {
                         val plan = s.id("plannedWorkDays")
                         require(plan <= Int.MAX_VALUE) { "Некорректный план смен" }
                         plan.toInt()
@@ -114,11 +120,15 @@ object BackupFormat {
                 MoneyOperationEntity(o.id("id"), if (o.get("shiftId") == JSONObject.NULL) null else o.id("shiftId"),
                     o.getString("date"), o.getString("type"), o.id("amountMinor"), o.getString("comment"))
             },
-            if (version == 4 || version == 5 || version == 6) objects("pauses").map { p -> ShiftPauseEntity(p.id("id"), p.id("shiftId"), p.getString("startDate"), if (p.isNull("resumeDate")) null else p.getString("resumeDate")) } else emptyList(),
-            if (version == 6) objects("tariffHistory").map { t ->
+            if (version == 4 || version == 5 || version == 6 || version == 7) objects("pauses").map { p -> ShiftPauseEntity(p.id("id"), p.id("shiftId"), p.getString("startDate"), if (p.isNull("resumeDate")) null else p.getString("resumeDate")) } else emptyList(),
+            if (version == 6 || version == 7) objects("tariffHistory").map { t ->
                 TariffHistoryEntity(t.id("id"), t.number("picksRate"), t.number("weightRate"),
                     t.number("volumeRate"), t.number("boxesRate"), t.number("hoursRate"),
                     if (t.isNull("savedAt")) null else t.id("savedAt"))
+            } else emptyList(),
+            if (version == 7) objects("groups").map { g ->
+                WorkGroupEntity(g.id("id"), g.getString("name"), g.getInt("mask"), g.getJSONArray("rates").toString(),
+                    if (g.isNull("savedAt")) null else g.id("savedAt"), g.getJSONArray("history").toString())
             } else emptyList()
         )
         validate(snapshot)
@@ -126,6 +136,18 @@ object BackupFormat {
     }
 
     fun validate(snapshot: BackupSnapshot) {
+        require(snapshot.groups.map { it.id }.distinct().size == snapshot.groups.size)
+        snapshot.groups.forEach { validateGroup(it) }
+        require(availableGroups(snapshot.tariffs.singleOrNull(), snapshot.groups).map { it.name.lowercase(Locale.ROOT) }.distinct().size == snapshot.groups.count { it.id != 1L } + 1)
+        snapshot.groups.firstOrNull { it.id == 1L }?.let { group ->
+            val tariff = snapshot.tariffs.singleOrNull() ?: error("Отсутствуют тарифы основной группы")
+            require(group.rates() == tariff.rates() && group.savedAt == tariff.savedAt) { "Несогласованные тарифы основной группы" }
+        }
+        val groupIds = snapshot.groups.map { it.id }.toSet() + 1L
+        snapshot.days.forEach { day ->
+            validateGroupedDay(day)
+            if (day.groupsJson != null) require(day.groups().all { it.id in groupIds }) { "Рабочий день ссылается на отсутствующую группу" }
+        }
         fun parseDate(value: String): java.util.Date? {
             val format = when {
                 value.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) -> "yyyy-MM-dd"
@@ -177,7 +199,7 @@ object BackupFormat {
 class BackupRepository(private val db: WorkDatabase) {
     suspend fun export(): String = db.withTransaction {
         val dao = db.workDao()
-        BackupFormat.encode(BackupSnapshot(dao.backupTariffs(), dao.backupDays(), dao.backupShifts(), dao.backupMoneyOperations(), dao.backupPauses(), dao.backupTariffHistory()))
+        BackupFormat.encode(BackupSnapshot(dao.backupTariffs(), dao.backupDays(), dao.backupShifts(), dao.backupMoneyOperations(), dao.backupPauses(), dao.backupTariffHistory(), dao.backupGroups()))
     }
 
     suspend fun restore(snapshot: BackupSnapshot) {
@@ -190,9 +212,11 @@ class BackupRepository(private val db: WorkDatabase) {
             dao.clearShiftsForRestore()
             dao.clearTariffsForRestore()
             dao.clearTariffHistory()
+            dao.clearGroupsForRestore()
             dao.restoreShifts(snapshot.shifts)
             snapshot.tariffs.forEach { dao.saveTariffsRaw(it) }
             dao.restoreTariffHistory(snapshot.tariffHistory)
+            dao.restoreGroups(snapshot.groups)
             dao.restoreDays(snapshot.days)
             dao.restoreMoneyOperations(snapshot.operations)
             dao.restorePauses(snapshot.pauses)

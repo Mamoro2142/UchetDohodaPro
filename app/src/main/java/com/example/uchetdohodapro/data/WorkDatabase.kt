@@ -61,9 +61,11 @@ data class WorkDayEntity(
     val volumeRate: Double = 0.0,
     val boxesRate: Double = 0.0,
     val hoursRate: Double = 0.0,
-    val shiftId: Long? = null
+    val shiftId: Long? = null,
+    val groupsJson: String? = null
 ) {
     fun calculateIncome(): Double {
+        if (groupsJson != null) return groups().sumOf { it.income() }
         return (picks ?: 0.0) * picksRate +
             (weight ?: 0.0) * weightRate +
             (volume ?: 0.0) * volumeRate +
@@ -110,6 +112,7 @@ fun dayFromInput(date: String, values: List<String>, tariffs: TariffEntity, shif
 }
 
 private fun validateDayNumbers(day: WorkDayEntity) {
+    validateGroupedDay(day)
     val values = listOfNotNull(day.picks, day.weight, day.volume, day.boxes, day.hours) +
         listOf(day.picksRate, day.weightRate, day.volumeRate, day.boxesRate, day.hoursRate)
     require(values.all { it.isFinite() && it >= 0 } && day.calculateIncome().isFinite()) { "Проверьте показатели и тарифы: сумма должна быть конечным числом" }
@@ -273,6 +276,42 @@ interface WorkDao {
                 boxesRate = previous.boxesRate, hoursRate = previous.hoursRate, savedAt = previous.savedAt))
         }
         saveTariffsRaw(tariffs)
+        backupGroups().firstOrNull { it.id == 1L }?.let { stored ->
+            val old = defaultGroup(previous, stored)
+            saveGroupRaw(stored.copy(ratesJson = writeRates(tariffs.rates()), savedAt = tariffs.savedAt,
+                historyJson = if (previous != null && previous.rates() != tariffs.rates()) previousGroupHistory(old) else stored.historyJson))
+        }
+    }
+
+    @Query("SELECT * FROM work_groups ORDER BY id")
+    fun observeGroups(): Flow<List<WorkGroupEntity>>
+    @Query("SELECT * FROM work_groups ORDER BY id")
+    suspend fun backupGroups(): List<WorkGroupEntity>
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun saveGroupRaw(group: WorkGroupEntity)
+    @Query("DELETE FROM work_groups")
+    suspend fun clearGroupsForRestore()
+    @Insert
+    suspend fun restoreGroups(groups: List<WorkGroupEntity>)
+
+    @Transaction
+    suspend fun saveGroup(group: WorkGroupEntity) {
+        val stored = backupGroups()
+        val tariffs = backupTariffs().singleOrNull()
+        val all = availableGroups(tariffs, stored)
+        val old = all.firstOrNull { it.id == group.id }
+        require(group.id == 0L || old != null) { "Группа не найдена" }
+        val id = if (group.id == 0L) (all.maxOf { it.id } + 1) else group.id
+        require(all.none { it.id != id && it.name.equals(group.name.trim(), ignoreCase = true) }) { "Группа с таким названием уже существует" }
+        val changed = old != null && (old.name != group.name.trim() || old.mask != group.mask || old.rates() != group.rates())
+        val history = if (changed && old != null && (old.id != 1L || tariffs != null)) previousGroupHistory(old) else old?.historyJson ?: "[]"
+        val updated = group.copy(id = id, name = group.name.trim(), savedAt = System.currentTimeMillis(), historyJson = history)
+        validateGroup(updated)
+        if (id == 1L) {
+            val r = updated.rates()
+            saveTariffs(TariffEntity(1, r[0], r[1], r[2], r[3], r[4], updated.savedAt))
+        }
+        saveGroupRaw(updated)
     }
 
     @Query("SELECT * FROM work_days ORDER BY date DESC, id DESC")
@@ -290,6 +329,10 @@ interface WorkDao {
     @Transaction
     suspend fun insertWorkDay(day: WorkDayEntity): Long {
         validateDayNumbers(day)
+        if (day.groupsJson != null) {
+            val ids = backupGroups().map { it.id }.toSet() + 1L
+            require(day.groups().all { it.id in ids }) { "Группа не найдена" }
+        }
         val date = parseStoredDate(day.date) ?: error("Неверная дата рабочего дня")
         require(countDaysForDate(date.toString(), date.format(DateTimeFormatter.ofPattern("dd.MM.uuuu")), 0) == 0) {
             "Рабочий день за эту дату уже существует. Измените его в истории."
@@ -305,6 +348,10 @@ interface WorkDao {
     @Transaction
     suspend fun updateWorkDay(day: WorkDayEntity) {
         validateDayNumbers(day)
+        if (day.groupsJson != null) {
+            val ids = backupGroups().map { it.id }.toSet() + 1L
+            require(day.groups().all { it.id in ids }) { "Группа не найдена" }
+        }
         val old = getWorkDay(day.id) ?: error("Рабочий день уже удалён")
         val date = parseStoredDate(day.date) ?: error("Неверная дата рабочего дня")
         if (day.date != old.date) require(countDaysForDate(date.toString(), date.format(DateTimeFormatter.ofPattern("dd.MM.uuuu")), day.id) == 0) {
@@ -463,9 +510,10 @@ interface WorkDao {
         ShiftEntity::class,
         MoneyOperationEntity::class,
         ShiftPauseEntity::class,
-        TariffHistoryEntity::class
+        TariffHistoryEntity::class,
+        WorkGroupEntity::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 abstract class WorkDatabase : RoomDatabase() {
@@ -540,6 +588,13 @@ abstract class WorkDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `work_days` ADD COLUMN `groupsJson` TEXT")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `work_groups` (`id` INTEGER NOT NULL, `name` TEXT NOT NULL, `mask` INTEGER NOT NULL, `ratesJson` TEXT NOT NULL, `savedAt` INTEGER, `historyJson` TEXT NOT NULL, PRIMARY KEY(`id`))")
+            }
+        }
+
         fun getInstance(context: Context): WorkDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -551,7 +606,7 @@ abstract class WorkDatabase : RoomDatabase() {
                         MIGRATION_1_2,
                         MIGRATION_2_3,
                         MIGRATION_3_4,
-                        MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8
+                        MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9
                     )
                     .build()
                     .also { INSTANCE = it }
