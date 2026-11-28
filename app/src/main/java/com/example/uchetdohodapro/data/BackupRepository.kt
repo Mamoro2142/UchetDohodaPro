@@ -64,7 +64,7 @@ object BackupFormat {
             } })
         }.toString()
         return JSONObject().put("applicationId", "com.example.uchetdohodapro")
-            .put("formatVersion", 7).put("payload", payload).put("sha256", digest(payload))
+            .put("formatVersion", 8).put("payload", payload).put("sha256", digest(payload))
             .toString().also { require(it.toByteArray(Charsets.UTF_8).size <= MAX_BYTES) { "Слишком большая копия" } }
     }
 
@@ -73,7 +73,7 @@ object BackupFormat {
         val envelope = JSONObject(text)
         require(envelope.getString("applicationId") == "com.example.uchetdohodapro") { "Файл другого приложения" }
         val version = envelope.get("formatVersion")
-        require(version == 1 || version == 2 || version == 3 || version == 4 || version == 5 || version == 6 || version == 7) { "Неподдерживаемая версия резервной копии" }
+        require(version == 1 || version == 2 || version == 3 || version == 4 || version == 5 || version == 6 || version == 7 || version == 8) { "Неподдерживаемая версия резервной копии" }
         val payload = envelope.getString("payload")
         require(digest(payload) == envelope.getString("sha256")) { "Нарушена целостность файла" }
         val json = JSONObject(payload)
@@ -104,13 +104,13 @@ object BackupFormat {
                 picksRate = d.number("picksRate"), weightRate = d.number("weightRate"),
                 volumeRate = d.number("volumeRate"), boxesRate = d.number("boxesRate"), hoursRate = d.number("hoursRate"),
                 shiftId = if (d.get("shiftId") == JSONObject.NULL) null else d.id("shiftId"),
-                groupsJson = if (version == 7 && !d.isNull("groups")) d.getJSONArray("groups").toString() else null
+                groupsJson = if ((version == 7 || version == 8) && !d.isNull("groups")) d.getJSONArray("groups").toString() else null
             ) },
             objects("shifts").map { s ->
                 require(s.get("isActive") is Boolean)
                 ShiftEntity(s.id("id"), s.getString("startDate"),
                     if (s.get("endDate") == JSONObject.NULL) null else s.getString("endDate"), s.getBoolean("isActive"),
-                    if ((version != 5 && version != 6 && version != 7) || s.get("plannedWorkDays") == JSONObject.NULL) null else {
+                    if ((version != 5 && version != 6 && version != 7 && version != 8) || s.get("plannedWorkDays") == JSONObject.NULL) null else {
                         val plan = s.id("plannedWorkDays")
                         require(plan <= Int.MAX_VALUE) { "Некорректный план смен" }
                         plan.toInt()
@@ -120,13 +120,13 @@ object BackupFormat {
                 MoneyOperationEntity(o.id("id"), if (o.get("shiftId") == JSONObject.NULL) null else o.id("shiftId"),
                     o.getString("date"), o.getString("type"), o.id("amountMinor"), o.getString("comment"))
             },
-            if (version == 4 || version == 5 || version == 6 || version == 7) objects("pauses").map { p -> ShiftPauseEntity(p.id("id"), p.id("shiftId"), p.getString("startDate"), if (p.isNull("resumeDate")) null else p.getString("resumeDate")) } else emptyList(),
-            if (version == 6 || version == 7) objects("tariffHistory").map { t ->
+            if (version == 4 || version == 5 || version == 6 || version == 7 || version == 8) objects("pauses").map { p -> ShiftPauseEntity(p.id("id"), p.id("shiftId"), p.getString("startDate"), if (p.isNull("resumeDate")) null else p.getString("resumeDate")) } else emptyList(),
+            if (version == 6 || version == 7 || version == 8) objects("tariffHistory").map { t ->
                 TariffHistoryEntity(t.id("id"), t.number("picksRate"), t.number("weightRate"),
                     t.number("volumeRate"), t.number("boxesRate"), t.number("hoursRate"),
                     if (t.isNull("savedAt")) null else t.id("savedAt"))
             } else emptyList(),
-            if (version == 7) objects("groups").map { g ->
+            if (version == 7 || version == 8) objects("groups").map { g ->
                 WorkGroupEntity(g.id("id"), g.getString("name"), g.getInt("mask"), g.getJSONArray("rates").toString(),
                     if (g.isNull("savedAt")) null else g.id("savedAt"), g.getJSONArray("history").toString())
             } else emptyList()

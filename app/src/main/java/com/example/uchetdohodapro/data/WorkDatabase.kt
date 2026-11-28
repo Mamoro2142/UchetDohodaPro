@@ -278,7 +278,7 @@ interface WorkDao {
         saveTariffsRaw(tariffs)
         backupGroups().firstOrNull { it.id == 1L }?.let { stored ->
             val old = defaultGroup(previous, stored)
-            saveGroupRaw(stored.copy(ratesJson = writeRates(tariffs.rates()), savedAt = tariffs.savedAt,
+            saveGroupRaw(stored.copy(ratesJson = stored.withBaseRates(tariffs.rates()), savedAt = tariffs.savedAt,
                 historyJson = if (previous != null && previous.rates() != tariffs.rates()) previousGroupHistory(old) else stored.historyJson))
         }
     }
@@ -303,7 +303,7 @@ interface WorkDao {
         require(group.id == 0L || old != null) { "Группа не найдена" }
         val id = if (group.id == 0L) (all.maxOf { it.id } + 1) else group.id
         require(all.none { it.id != id && it.name.equals(group.name.trim(), ignoreCase = true) }) { "Группа с таким названием уже существует" }
-        val changed = old != null && (old.name != group.name.trim() || old.mask != group.mask || old.rates() != group.rates())
+        val changed = old != null && (old.name != group.name.trim() || old.mask != group.mask || old.rates() != group.rates() || old.definitions() != group.definitions())
         val history = if (changed && old != null && (old.id != 1L || tariffs != null)) previousGroupHistory(old) else old?.historyJson ?: "[]"
         val updated = group.copy(id = id, name = group.name.trim(), savedAt = System.currentTimeMillis(), historyJson = history)
         validateGroup(updated)
