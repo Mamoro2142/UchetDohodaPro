@@ -186,6 +186,7 @@ fun StatisticsScreen() {
         Spacer(Modifier.height(24.dp))
 
         RecordsPanel(data)
+        GroupIncomePanel(days, includeRecords = true)
         Spacer(Modifier.height(24.dp))
 
         Text(

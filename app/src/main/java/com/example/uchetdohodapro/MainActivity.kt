@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -62,7 +63,7 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun IncomeApp() {
-    var selectedTab by remember {
+    var selectedTab by rememberSaveable {
         mutableIntStateOf(0)
     }
     var shiftDetailsOpen by remember {
@@ -80,10 +81,16 @@ private fun IncomeApp() {
         mutableStateOf(false)
     }
 
+    var showUpdateHistory by rememberSaveable { mutableStateOf(false) }
+
     // Перехватываем системное действие "Назад".
     // На главной вкладке оно ничего не делает.
     BackHandler(enabled = true) {
         when {
+            showUpdateHistory -> {
+                showUpdateHistory = false
+            }
+
             showTariffs -> {
                 showTariffs = false
             }
@@ -104,6 +111,11 @@ private fun IncomeApp() {
                 // Главная: остаёмся в приложении.
             }
         }
+    }
+
+    if (showUpdateHistory) {
+        UpdateHistoryScreen(onBack = { showUpdateHistory = false })
+        return
     }
 
     if (showTariffs) {
@@ -269,7 +281,8 @@ private fun IncomeApp() {
                 else -> ProfileScreen(
                     onTariffsClick = {
                         showTariffs = true
-                    }
+                    },
+                    onUpdateHistoryClick = { showUpdateHistory = true }
                 )
             }
         }
@@ -658,7 +671,8 @@ private fun MiniValue(
 }
 @Composable
 private fun ProfileScreen(
-    onTariffsClick: () -> Unit
+    onTariffsClick: () -> Unit,
+    onUpdateHistoryClick: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -756,5 +770,7 @@ private fun ProfileScreen(
         }
         Spacer(Modifier.height(14.dp))
         MoneyOperationsPanel()
+        Spacer(Modifier.height(20.dp))
+        UpdateHistoryEntry(onClick = onUpdateHistoryClick)
     }
 }

@@ -109,23 +109,23 @@ fun ShiftDetailsScreen(
     val hours = days.sumOf { it.hours ?: 0.0 }
 
     val picksIncome = days.sumOf {
-        (it.picks ?: 0.0) * it.picksRate
+        it.metricIncome(0)
     }
 
     val weightIncome = days.sumOf {
-        (it.weight ?: 0.0) * it.weightRate
+        it.metricIncome(1)
     }
 
     val volumeIncome = days.sumOf {
-        (it.volume ?: 0.0) * it.volumeRate
+        it.metricIncome(2)
     }
 
     val boxesIncome = days.sumOf {
-        (it.boxes ?: 0.0) * it.boxesRate
+        it.metricIncome(3)
     }
 
     val hoursIncome = days.sumOf {
-        (it.hours ?: 0.0) * it.hoursRate
+        it.metricIncome(4)
     }
 
     val totalIncome = days.sumOf {
@@ -281,6 +281,8 @@ fun ShiftDetailsScreen(
                         // Показываем только заполненные поля.
                         // Если поле равно null, оно не выводится.
 
+                        if (day.groupsJson != null) { GroupedDayBreakdown(day) } else {
+                        Text("Раздел", color = DetailsOrange)
                         if (day.picks != null) {
                             Text(
                                 "Пики: ${number(day.picks)}"
@@ -312,6 +314,7 @@ fun ShiftDetailsScreen(
                             )
                         }
 
+                        }
                         HorizontalDivider()
 
                         Row(
@@ -335,6 +338,7 @@ fun ShiftDetailsScreen(
             }
         }
 
+        GroupIncomePanel(days)
         Spacer(
             modifier = Modifier.height(24.dp)
         )

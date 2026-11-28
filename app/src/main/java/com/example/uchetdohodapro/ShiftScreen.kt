@@ -2,6 +2,9 @@
 package com.example.uchetdohodapro
 
 import androidx.activity.compose.BackHandler
+import com.example.uchetdohodapro.data.parseStoredDate
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -251,7 +254,13 @@ fun ShiftScreen(
             if (shifts.isEmpty()) {
                 Text("Вахт пока нет")
             }
-            shifts.forEach { shift ->
+            var archiveExpanded by rememberSaveable { mutableStateOf(false) }
+            val visibleShifts = shifts.filter { it.isActive || it.id == latestClosedId }
+                .sortedByDescending { it.isActive }
+            val archivedShifts = shifts.filterNot { it.isActive || it.id == latestClosedId }
+                .sortedWith(compareByDescending<ShiftEntity> { parseStoredDate(it.endDate ?: it.startDate) }.thenByDescending { it.id })
+            val cardContent: @Composable (ShiftEntity) -> Unit = { shift ->
+              key(shift.id) {
                 Card(
                     modifier = Modifier.fillMaxWidth().seasonalCard()
                 ) {
@@ -367,6 +376,18 @@ fun ShiftScreen(
                 }
             }
 
+              }
+            visibleShifts.forEach { cardContent(it) }
+            if (archivedShifts.isNotEmpty()) {
+                OutlinedButton(onClick = { archiveExpanded = !archiveExpanded }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Архив вахт · ${archivedShifts.size}  ${if (archiveExpanded) "▴" else "▾"}")
+                }
+                AnimatedVisibility(visible = archiveExpanded) {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        archivedShifts.forEach { cardContent(it) }
+                    }
+                }
+            }
             val unassignedDays = workDays.filter {
                 it.shiftId == null
             }

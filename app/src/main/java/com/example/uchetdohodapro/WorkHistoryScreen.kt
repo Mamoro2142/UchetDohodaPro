@@ -332,6 +332,8 @@ private fun WorkHistoryCard(
 
             Spacer(Modifier.height(8.dp))
 
+            if (day.groupsJson != null) { GroupedDayBreakdown(day) } else {
+            Text("Раздел", color = HistoryOrange, fontSize = 13.sp)
             if (day.picks != null) {
                 Text(
                     "Пики: ${day.picks}",
@@ -366,6 +368,7 @@ private fun WorkHistoryCard(
                     color = HistoryText
                 )
             }
+            }
         }
     }
 }
@@ -381,6 +384,12 @@ internal fun WorkDayEditScreen(
     onDelete: () -> Unit,
     error: String
 ) {
+    val catalog = observeGroupCatalog()
+    if (catalog == null) { CircularProgressIndicator(); return }
+    if (day.groupsJson != null || catalog.configured) {
+        GroupedDayForm(catalog, day, day.date, day.shiftId, shifts, shiftNumbers, saving, onBack, onSave, onDelete, error)
+        return
+    }
     var date by remember(day.id) {
         mutableStateOf(day.date)
     }

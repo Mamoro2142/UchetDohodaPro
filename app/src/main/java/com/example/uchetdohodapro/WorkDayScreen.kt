@@ -28,6 +28,29 @@ import java.util.Locale
 
 @Composable
 fun WorkDayScreen(onBack: () -> Unit = {}, initialDate: String? = null, initialShiftId: Long? = null) {
+    val catalog = observeGroupCatalog()
+    if (catalog == null) { CircularProgressIndicator(); return }
+    if (!catalog.configured) { LegacyWorkDayScreen(onBack, initialDate, initialShiftId); return }
+    val context = LocalContext.current
+    val dao = remember(context) { WorkDatabase.getInstance(context).workDao() }
+    val scope = rememberCoroutineScope()
+    val shifts = LocalIncomeSnapshot.current.shifts
+    val numbers = remember(shifts) { shifts.sortedBy { it.id }.mapIndexed { i, shift -> shift.id to i + 1 }.toMap() }
+    var saving by remember { mutableStateOf(false) }
+    var saved by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf("") }
+    GroupedDayForm(catalog, null, initialDate, initialShiftId, shifts, numbers, saving, onBack, onSave = { day ->
+        if (!saving && !saved) { saving = true; error = ""; scope.launch {
+            try { dao.insertWorkDay(day); saved = true }
+            catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) { error = e.message ?: "Не удалось сохранить день" }
+            finally { saving = false }
+        } }
+    }, error = error, saved = saved)
+}
+
+@Composable
+private fun LegacyWorkDayScreen(onBack: () -> Unit = {}, initialDate: String? = null, initialShiftId: Long? = null) {
     val context = LocalContext.current
 
     val dao = remember(context) {

@@ -17,6 +17,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -84,10 +85,11 @@ fun TariffsScreen(
     var boxes by rememberSaveable { mutableStateOf("") }
     var hours by rememberSaveable { mutableStateOf("") }
     var initialized by rememberSaveable { mutableStateOf(false) }
+    var showGroups by rememberSaveable { mutableStateOf(false) }
     var validationMessage by rememberSaveable { mutableStateOf("") }
     val message = validationMessage.ifBlank { model.message }
 
-    LaunchedEffect(loadedTariffs) {
+    LaunchedEffect(loadedTariffs, showGroups) {
         val saved = tariffs
         if (saved != null && !initialized) {
             picks = saved.picksRate.toEditableRate()
@@ -110,7 +112,7 @@ fun TariffsScreen(
     ) {
         WinterPageHeader()
         Button(
-    onClick = onBack,
+    onClick = { if (showGroups) { initialized = false; showGroups = false } else onBack() },
     colors = ButtonDefaults.buttonColors(
         containerColor = Color(0xFF272C30),
         contentColor = Color(0xFFF4F5F6)
@@ -146,7 +148,16 @@ Spacer(Modifier.height(18.dp))
             fontSize = 14.sp
         )
 
-        Spacer(Modifier.height(22.dp))
+        Spacer(Modifier.height(12.dp))
+        OutlinedButton(onClick = { showGroups = !showGroups; if (!showGroups) initialized = false }, enabled = !model.saving, modifier = Modifier.fillMaxWidth()) {
+            Text(if (showGroups) "Основные тарифы" else "Рабочие группы")
+        }
+        if (showGroups) {
+            Spacer(Modifier.height(12.dp))
+            GroupSettingsPanel()
+            return@Column
+        }
+        Spacer(Modifier.height(12.dp))
 
         TariffInput(
             title = "Пики",
@@ -244,6 +255,7 @@ Spacer(Modifier.height(18.dp))
 
         Spacer(Modifier.height(24.dp))
         TariffHistoryPanel(tariffs, history)
+
     }
 }
 

@@ -109,8 +109,11 @@ fun ShiftMonthCalendar(shift: ShiftEntity, days: List<WorkDayEntity>, selected: 
                     ShiftDayStatus.WORK -> {
                         Text("Заработано: ${money(model.income(selected))}", color = CalendarGreen, style = MaterialTheme.typography.titleMedium)
                         model.records(selected).forEach { day ->
+                            if (day.groupsJson != null) { GroupedDayBreakdown(day) } else {
+                            Text("Раздел", color = CalendarOrange)
                             listOf("Пики" to day.picks, "Вес" to day.weight, "Объём" to day.volume, "Боксы" to day.boxes, "Часы" to day.hours).forEach { (label, value) ->
                                 if (value != null) Text("$label: ${editableNumber(value)}", style = MaterialTheme.typography.bodySmall)
+                            }
                             }
                             OutlinedButton(onClick = { onEdit(day) }, modifier = Modifier.fillMaxWidth()) { Text("Редактировать смену") }
                         }
