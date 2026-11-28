@@ -57,12 +57,11 @@ internal fun GroupSettingsPanel() {
         Card(Modifier.fillMaxWidth().padding(vertical = 5.dp).seasonalCard()) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(group.name, color = groupOrange, style = MaterialTheme.typography.titleLarge)
-                val rates = group.rates()
-                workMetricNames.forEachIndexed { index, label -> if (group.enabled(index)) {
+                group.definitions().forEach { metric ->
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(label); Text(formatRubles(rates[index]), color = groupGreen)
+                        Text(metric.name); Text(formatRubles(metric.rate), color = groupGreen)
                     }
-                } }
+                }
                 Text(group.savedAt?.let { "Последнее сохранение: " + SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date(it)) } ?: "Дата сохранения пока не указана", style = MaterialTheme.typography.bodySmall)
                 OutlinedButton(onClick = { error = ""; editing = group }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Редактировать группу") }
                 val history = group.history().asReversed()
@@ -71,13 +70,14 @@ internal fun GroupSettingsPanel() {
                     if (group.id in expandedHistory) history.forEachIndexed { index, old ->
                         HorizontalDivider()
                         Text(old.name + " · " + (old.savedAt?.let { SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date(it)) } ?: "Дата неизвестна"))
-                        val next = if (index == 0) rates else history[index - 1].rates
-                        workMetricNames.forEachIndexed { i, label -> if (old.mask and (1 shl i) != 0) {
-                            val change = if (old.rates[i] > 0) (next[i] / old.rates[i] - 1) * 100 else null
+                        val next = if (index == 0) group.definitions() else history[index - 1].definitions
+                        old.definitions.forEach { metric ->
+                            val newer = next.firstOrNull { it.id == metric.id }
+                            val change = if (metric.rate > 0 && newer != null) (newer.rate / metric.rate - 1) * 100 else null
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text(label); Text(formatRubles(old.rates[i])); Text(change?.takeIf { it.isFinite() }?.let { String.format(Locale.getDefault(), "%+.1f%%", it) } ?: "—", color = if ((change ?: 0.0) < 0) MaterialTheme.colorScheme.error else groupGreen)
+                                Text(metric.name); Text(formatRubles(metric.rate)); Text(change?.takeIf { it.isFinite() }?.let { String.format(Locale.getDefault(), "%+.1f%%", it) } ?: if (newer == null) "Удалён" else "—", color = if ((change ?: 0.0) < 0) MaterialTheme.colorScheme.error else groupGreen)
                             }
-                        } }
+                        }
                     }
                 }
             }
@@ -99,37 +99,48 @@ internal fun GroupSettingsPanel() {
     } }
 }
 
+private data class MetricEditorRow(val id: String, val name: String, val rate: String)
 @Composable
 private fun GroupEditorDialog(group: WorkGroupEntity, busy: Boolean, error: String, onDismiss: () -> Unit, onSave: (WorkGroupEntity) -> Unit) {
     var name by remember { mutableStateOf(group.name) }
-    var mask by remember { mutableIntStateOf(group.mask) }
-    var rates by remember { mutableStateOf(group.rates().map(::editableNumber)) }
+    var rows by remember { mutableStateOf(group.definitions().map { MetricEditorRow(it.id, it.name, editableNumber(it.rate)) }) }
     var validation by remember { mutableStateOf("") }
+    fun move(index: Int, delta: Int) { rows = rows.toMutableList().apply { val target = index + delta; if (target in indices) add(target, removeAt(index)) } }
+    fun addMetric(id: String, label: String, rate: String) { rows = rows + MetricEditorRow(id, label, rate) }
     AlertDialog(onDismissRequest = onDismiss, title = { Text(if (group.id == 0L) "Новая группа" else "Редактирование группы") }, text = {
         Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(name, { name = it }, label = { Text("Название группы") }, singleLine = true, enabled = !busy)
-            workMetricNames.forEachIndexed { i, label ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(mask and (1 shl i) != 0, { enabled -> mask = if (enabled) mask or (1 shl i) else mask and (1 shl i).inv() }, enabled = !busy)
-                    Text(label)
+            Text("Рабочие показатели · ${rows.size}", fontWeight = FontWeight.Bold)
+            rows.forEachIndexed { index, row -> key(row.id) {
+                HorizontalDivider()
+                OutlinedTextField(row.name, { v -> rows = rows.map { if (it.id == row.id) it.copy(name = v) else it } }, label = { Text("Название показателя") }, singleLine = true, enabled = !busy, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(row.rate, { v -> rows = rows.map { if (it.id == row.id) it.copy(rate = v) else it } }, label = { Text("Тариф, ₽") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), enabled = !busy, singleLine = true, modifier = Modifier.fillMaxWidth())
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    TextButton(onClick = { move(index, -1) }, enabled = !busy && index > 0) { Text("↑") }
+                    TextButton(onClick = { move(index, 1) }, enabled = !busy && index < rows.lastIndex) { Text("↓") }
+                    TextButton(onClick = { rows = rows.filterNot { it.id == row.id } }, enabled = !busy) { Text("Убрать", color = MaterialTheme.colorScheme.error) }
                 }
-                if (mask and (1 shl i) != 0) OutlinedTextField(rates[i], { value -> rates = rates.mapIndexed { j, old -> if (j == i) value else old } }, label = { Text("Тариф · $label, ₽") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), enabled = !busy, singleLine = true)
-            }
+            } }
+            OutlinedButton(onClick = { addMetric("custom:" + java.util.UUID.randomUUID(), "", "0") }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("+ Добавить показатель") }
+            workMetricNames.forEachIndexed { index, label -> if (rows.none { it.id == "base:$index" }) {
+                TextButton(onClick = { addMetric("base:$index", label, editableNumber(group.rates()[index])) }, enabled = !busy) { Text("+ $label") }
+            } }
             if (validation.isNotBlank() || error.isNotBlank()) Text(validation.ifBlank { error }, color = MaterialTheme.colorScheme.error)
         }
     }, confirmButton = { TextButton(enabled = !busy, onClick = {
-        val parsed = rates.mapIndexed { i, text -> if (mask and (1 shl i) != 0) parseNonNegativeNumber(text) else group.rates()[i] }
-        if (name.isBlank() || name.trim().length > 80 || mask == 0 || parsed.any { it == null }) validation = "Укажите название, хотя бы один показатель и корректные тарифы"
-        else { validation = ""; onSave(group.copy(name = name.trim(), mask = mask, ratesJson = writeRates(parsed.filterNotNull()))) }
+        val parsed = rows.mapNotNull { row -> parseNonNegativeNumber(row.rate)?.let { MetricDefinition(row.id, row.name.trim(), it) } }
+        val updated = runCatching { require(name.trim().length in 1..80 && parsed.size == rows.size); group.withDefinitions(parsed).copy(name = name.trim()) }.getOrNull()
+        if (updated == null) validation = "Укажите название группы, уникальные названия показателей и корректные тарифы"
+        else { validation = ""; onSave(updated) }
     }) { Text(if (busy) "Сохранение…" else "Сохранить группу") } }, dismissButton = { TextButton(enabled = !busy, onClick = onDismiss) { Text("Отмена") } })
 }
 
 private data class GroupDraft(val source: DayGroup, val input: List<String>) {
-    fun result(): DayGroup = source.copy(values = input.mapIndexed { i, value -> if (source.mask and (1 shl i) != 0) parseNonNegativeNumber(value) else null })
-    fun valid(): Boolean = input.withIndex().all { (i,v) -> source.mask and (1 shl i) == 0 || v.isBlank() || parseNonNegativeNumber(v) != null }
+    fun result(): DayGroup = source.withMeasurements(source.entries().mapIndexed { i, entry -> entry.copy(value = parseNonNegativeNumber(input[i])) })
+    fun valid(): Boolean = input.all { it.isBlank() || parseNonNegativeNumber(it) != null }
 }
-private fun DayGroup.draft() = GroupDraft(this, values.map(::editableNumber))
-private fun WorkGroupEntity.draft() = DayGroup(id, name, mask, List(5) { null }, rates()).draft()
+private fun DayGroup.draft() = GroupDraft(this, entries().map { editableNumber(it.value) })
+private fun WorkGroupEntity.draft() = newDayGroup().draft()
 
 /** A single editor and a single atomic DAO write regardless of group count. */
 @Composable
@@ -157,12 +168,12 @@ internal fun GroupedDayForm(
         if (choosing) {
             Text("Выберите группы", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             Text("В каких группах вы работали?")
-            val candidates = (available.map { it.id to (it.name to it.mask) } + original.values.map { it.source.id to (it.source.name to it.source.mask) }).distinctBy { it.first }
+            val candidates = (original.values.map { it.source.id to (it.source.name to it.source.entries().map { e -> e.definition.name }) } + available.map { it.id to (it.name to it.definitions().map { d -> d.name }) }).distinctBy { it.first }
             candidates.forEach { (id, info) ->
                 Card(Modifier.fillMaxWidth().seasonalCard()) {
                     Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(id in pending, { checked -> pending = if (checked) pending + id else pending - id })
-                        Column(Modifier.weight(1f)) { Text(info.first, color = groupOrange, fontWeight = FontWeight.Bold); Text(workMetricNames.filterIndexed { i, _ -> info.second and (1 shl i) != 0 }.joinToString(", "), style = MaterialTheme.typography.bodySmall) }
+                        Column(Modifier.weight(1f)) { Text(info.first, color = groupOrange, fontWeight = FontWeight.Bold); Text(info.second.joinToString(", "), style = MaterialTheme.typography.bodySmall) }
                     }
                 }
             }
@@ -183,10 +194,10 @@ internal fun GroupedDayForm(
                             Text(draft.source.name, color = groupOrange, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
                             TextButton(enabled = !busy && !saved && selected.size > 1, onClick = { selected = selected - draft.source.id }) { Text("Убрать") }
                         }
-                        workMetricNames.forEachIndexed { i, label -> if (draft.source.mask and (1 shl i) != 0) {
-                            OutlinedTextField(draft.input[i], { value -> drafts = drafts + (draft.source.id to draft.copy(input = draft.input.mapIndexed { j,v -> if (i == j) value else v })) }, label = { Text(label) }, supportingText = { Text("Тариф: ${formatRubles(draft.source.rates[i])}") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, enabled = !busy && !saved, modifier = Modifier.fillMaxWidth())
-                        } }
-                        Text("Заработок: ${formatRubles(draft.result().income())}", color = groupGreen, fontWeight = FontWeight.Bold)
+                        draft.source.entries().forEachIndexed { i, entry ->
+                            OutlinedTextField(draft.input[i], { value -> drafts = drafts + (draft.source.id to draft.copy(input = draft.input.mapIndexed { j,v -> if (i == j) value else v })) }, label = { Text(entry.definition.name) }, supportingText = { Text("Тариф: ${formatRubles(entry.definition.rate)}") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, enabled = !busy && !saved, modifier = Modifier.fillMaxWidth())
+                        }
+                        Text("Заработок: ${draft.result().income().takeIf { it.isFinite() }?.let(::formatRubles) ?: "Проверьте показатели"}", color = groupGreen, fontWeight = FontWeight.Bold)
                     }
                 }
             } }
@@ -219,7 +230,7 @@ internal fun GroupedDayForm(
 internal fun GroupedDayBreakdown(day: WorkDayEntity) {
     day.groups().forEach { group ->
         Text(group.name + " · " + formatRubles(group.income()), color = groupOrange, fontWeight = FontWeight.Medium)
-        group.values.forEachIndexed { i, v -> if (v != null) Text("${workMetricNames[i]}: ${editableNumber(v)}", style = MaterialTheme.typography.bodySmall) }
+        group.entries().forEach { entry -> entry.value?.let { v -> Text("${entry.definition.name}: ${editableNumber(v)} · ${formatRubles(entry.income())}", style = MaterialTheme.typography.bodySmall) } }
     }
 }
 
@@ -249,10 +260,16 @@ internal fun GroupIncomePanel(days: List<WorkDayEntity>, includeRecords: Boolean
             HorizontalDivider(); Text(name, color = palette[index % palette.size], fontWeight = FontWeight.Bold)
             Text(formatRubles(sum), color = groupGreen)
             Text("Смен: ${uniqueWorkDayCount(rows.map { it.first })}" + if (overall > 0 && overall.isFinite()) " · ${String.format(Locale.getDefault(), "%.1f%%", sum / overall * 100)}" else "")
+            val byMetric = rows.flatMap { (day, group) -> group.entries().filter { it.value != null }.map { day to it } }.groupBy { it.second.definition.id }
+            byMetric.values.forEach { entries ->
+                val label = entries.maxByOrNull { parseStoredDate(it.first.date) ?: LocalDate.MIN }!!.second.definition.name
+                Text("$label: ${editableNumber(entries.sumOf { it.second.value ?: 0.0 })} · ${formatRubles(entries.sumOf { it.second.income() })}", style = MaterialTheme.typography.bodySmall)
+                if (includeRecords) Text("Максимум · $label: ${editableNumber(entries.maxOf { it.second.value ?: 0.0 })}", style = MaterialTheme.typography.bodySmall)
+            }
             if (includeRecords) {
                 Text("Лучшая смена: ${formatRubles(rows.groupBy { parseStoredDate(it.first.date)?.toString() ?: it.first.date }.values.maxOf { list -> list.sumOf { it.second.income() } })}")
                 rows.groupBy { it.first.shiftId }.filterKeys { it != null }.values.maxOfOrNull { list -> list.sumOf { it.second.income() } }?.let { Text("Лучшая вахта: ${formatRubles(it)}") }
-                workMetricNames.forEachIndexed { i, label -> rows.mapNotNull { it.second.values[i] }.maxOrNull()?.let { Text("Максимум · $label: ${editableNumber(it)}", style = MaterialTheme.typography.bodySmall) } }
+                
             }
         }
     } }

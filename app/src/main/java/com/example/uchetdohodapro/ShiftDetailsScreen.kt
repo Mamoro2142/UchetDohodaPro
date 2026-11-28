@@ -194,6 +194,7 @@ fun ShiftDetailsScreen(
         MoneyOperationsPanel(shift.id)
         HorizontalDivider()
 
+        if (days.none { it.groupsJson != null }) {
         Text(
             "Статистика показателей",
             style = MaterialTheme.typography.titleLarge
@@ -229,6 +230,7 @@ fun ShiftDetailsScreen(
             money(hoursIncome)
         )
 
+        }
         HorizontalDivider()
 
         Row(
